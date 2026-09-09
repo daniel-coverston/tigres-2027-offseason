@@ -1,0 +1,8 @@
+node_modules
+dist
+dist-single
+datos_lmb/
+sonda_lmb/
+.DS_Store
+.vercel
+*.log
