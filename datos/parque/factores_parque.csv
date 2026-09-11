@@ -1,0 +1,22 @@
+estadio_id,sede,ciudad,altitud_m,factor,ic_bajo,ic_alto,juegos_casa,juegos_visita,significativo
+5340,Estadio Alfredo Harp Helu,Mexico City,2229.0,1.3764,1.2699,1.4896,295,302,true
+2869,Estadio Hermanos Serdan,Puebla,2217.0,1.2711,1.1797,1.3794,283,286,true
+5321,Estadio Francisco Villa,Durango,1916.0,1.236,1.138,1.3433,262,263,true
+6070,Estadio Conspiradores,Huimilpan,2126.0,1.2265,1.0976,1.3622,136,141,true
+5320,Parque Domingo Santana,Leon,1817.0,1.2233,1.1203,1.3356,263,259,true
+3210,Estadio Chihuahua,Chihuahua,1434.0,1.2189,1.084,1.371,138,140,true
+2929,Estadio Alberto Romo Chavez,Aguascalientes,1886.0,1.1934,1.1008,1.294,263,267,true
+4710,Estadio de Los Charros,Jalisco,1557.0,1.1335,1.05,1.2236,283,286,true
+2953,Parque Francisco I. Madero,Saltillo,1554.0,1.1198,1.0246,1.2185,263,264,true
+2951,Parque Lic. Eduardo Vasconcelos,Oaxaca,1568.0,1.1015,1.0178,1.1932,274,278,true
+2956,Estadio de la Revolucion,Laguna,1125.0,0.9383,0.8696,1.0139,297,280,false
+2950,Estadio Monclova,Monclova,602.0,0.9186,0.8524,0.991,285,276,true
+2701,Estadio de Beisbol Monterrey,Monterrey,513.0,0.9112,0.8447,0.9805,306,288,true
+2949,Parque Nelson Barrera Romellon,Campeche,3.0,0.8364,0.7623,0.9212,227,266,true
+2957,Estadio Chevron,Tijuana,101.0,0.8236,0.7606,0.8952,295,289,true
+2958,Estadio Universitario Beto Avila,Veracruz,9.0,0.8148,0.747,0.889,278,271,true
+3410,Parque la Junta,Nuevo Laredo,125.0,0.794,0.7081,0.8807,137,286,true
+5330,Uni-Trade Stadium,,153.0,0.7449,0.6698,0.8236,142,286,true
+3929,Estadio De Beisbol Beto Avila,Cancun,5.0,0.7329,0.6721,0.8002,258,264,true
+2959,Parque Kukulkan,Yucatan,10.0,0.7022,0.6386,0.7715,247,233,true
+2955,Parque Centenario 27 de Febrero,Tabasco,21.0,0.6827,0.6171,0.7555,218,232,true

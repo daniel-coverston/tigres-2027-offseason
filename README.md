@@ -3,10 +3,11 @@
 Tablero interactivo que compara a los jugadores de **Tigres de Quintana Roo** contra los 20
 equipos de la Liga Mexicana de Béisbol, posición por posición, sobre las temporadas 2024–2026.
 
-**El hallazgo:** la ofensiva de Tigres es **la peor de la liga** —20.ª de 20 en wOBA, con un
-OPS+ de 73— por tercer año seguido. Y el pitcheo, que la tabla coloca 6.º por efectividad, es
-**12.º por FIP** y **19.º en ponches menos boletos**. El equipo no tiene una mitad sana y otra
-rota: tiene una mitad rota y otra que se ve mejor de lo que es.
+**El hallazgo:** Tigres juega la mitad de su calendario en el **tercer parque más difícil de la
+liga** (factor de carreras 0.733 sobre 5,318 juegos). Descontarlo cambia el diagnóstico en las dos
+direcciones: la ofensiva pasa de 20.ª a **18.ª de 20** y su OPS+ de 73 a **87**, mientras que el
+pitcheo cae al **14.º por FIP** y su K-BB% queda **último de los 20 equipos**. El problema crónico
+del club no es el que muestran los números crudos.
 
 ![Vista de diagnóstico](docs/diagnostico.png)
 
@@ -17,12 +18,15 @@ rota: tiene una mitad rota y otra que se ve mejor de lo que es.
 | Pestaña | Qué responde |
 |---|---|
 | **Diagnóstico** | Dónde está parado el equipo: los 20 clubes en un cuadrante de wOBA contra FIP, la trayectoria de tres años, el percentil del mejor Tigre en cada posición y el panel del espejismo de la efectividad |
+| **El parque** | Los 21 estadios de la liga con su intervalo de confianza, qué evento reprime exactamente el Beto Ávila, lo que eso implica al construir el roster, y el análisis de sensibilidad |
 | **Bateo / Pitcheo** | Cada jugador calificado de Tigres contra los de su misma posición en toda la liga: percentiles por métrica, ranking reordenable, cuadrante de dispersión y tabla completa |
 | **Cupos de importado** | Cuánto rindió cada extranjero por encima del jugador mexicano mediano de su posición, y cómo se compara ese retorno con el de los otros 19 equipos |
 | **Plan 2027** | Posiciones ordenadas por urgencia y el perfil de producción que hay que igualar en cada una |
 
-El selector del encabezado recalcula todo el tablero para 2024, 2025 o 2026. La pestaña
-Plan 2027 siempre describe la temporada base 2026.
+El encabezado tiene dos interruptores. Uno cambia la temporada (2024, 2025 o 2026). El otro
+**activa o desactiva el ajuste por parque en todo el tablero**: percentiles, tiers, rankings,
+cuadrantes y auditoría de cupos se recalculan enteros. Todo número publicado se puede ver en sus
+dos versiones.
 
 ### Por qué no se usan OPS ni efectividad
 
@@ -44,6 +48,32 @@ Medido por efectividad, el pitcheo de Tigres sube del lugar 13 al 6 en tres temp
 por FIP no se mueve: 13.º, 11.º, 12.º. La ofensiva, con cualquiera de las dos medidas, es la peor
 de la liga.
 
+### El ajuste por parque
+
+El Beto Ávila de Cancún tiene un **factor de carreras de 0.733**: se anota 27% menos que en un
+parque promedio de la LMB. Los factores vienen de un proyecto aparte
+([lmb-analytics](https://github.com/daniel-coverston/lmb-analytics)) construido sobre 5,318 juegos
+de 2021–2026 de la MLB Stats API, donde la altitud de la sede explica el 94% de la variación.
+
+Un equipo juega alrededor de la mitad en casa, así que el multiplicador de temporada es
+**(factor + 1) / 2**. Cada evento se ajusta con su propio factor —en Cancún los dobles caen 29%,
+los sencillos 13% y los boletos 9%, pero los cuadrangulares son neutrales y los ponches suben
+18%— y con los componentes corregidos se recalculan wOBA, OPS+ y FIP desde cero.
+
+**Qué cambia:**
+
+| | Sin ajustar | Ajustado |
+|---|---|---|
+| wOBA del equipo | .311 — 20.º de 20 | .334 — 18.º |
+| OPS+ | 73 | 87 |
+| FIP | 5.23 — 12.º | 5.41 — 14.º |
+| K-BB% | 8.4 — 19.º | 6.5 — **20.º de 20** |
+| Retorno de cupos de importado | −0.015 → 18.º | **+0.011 → 11.º** |
+
+La pestaña **El parque** incluye un análisis de sensibilidad que recalcula todo en los dos
+extremos del intervalo de confianza del factor (0.672 a 0.800). Ninguna conclusión se da la vuelta
+dentro del intervalo: lo único que cambia es la magnitud.
+
 ### La métrica propia: ventaja sobre el nacional mediano
 
 La LMB pasó de 20 extranjeros por equipo en 2024–2025 a **18 en 2026–2027**, con la meta
@@ -54,11 +84,12 @@ Para cada importado se calcula su wOBA (o su FIP) **menos la mediana de los juga
 calificados en su misma posición ese año**, ponderado por turnos al bate o entradas lanzadas.
 Si el resultado es negativo, un nacional habría rendido más y el cupo salió sobrando.
 
-Tigres quedó **18.º de 20** en el retorno de sus cupos de bateo. No por usar demasiados —usó
-el 76% de sus turnos en importados, por debajo del promedio de la liga— sino por a quién se los
-dio. En el pitcheo el balance es distinto: los cupos quedaron 12.º de 20 medidos por FIP.
+Sin ajustar por parque, Tigres queda 18.º de 20 en el retorno de sus cupos de bateo. **Con el
+parque descontado sube al 11.º y el signo se invierte:** los importados rindieron por encima del
+mexicano mediano. Ese ajuste rehabilita a casi toda la ofensiva extranjera del roster; los únicos
+que no se salvan con ninguna medida son tres bateadores concretos.
 
-![Auditoría de cupos de importado](docs/cupos-de-importado.png)
+![Factores de parque de la liga](docs/el-parque.png)
 
 ---
 
@@ -99,6 +130,7 @@ python datos/analisis.py               # reescribe src/data.json
 | `datos/nacionalidades.py` | Los `player_id` de la LMB son los mismos IDs de persona de MLB, así que la API pública de MLB devuelve país de nacimiento y fecha de nacimiento por lote |
 | `datos/prep.py` | Normalización: nombres de equipo, entradas en notación beisbolera, roles de abridor y relevista, agrupación de jardineros |
 | `datos/metricas.py` | wOBA, OPS+, FIP y K-BB%, con el porqué de cada elección documentado en el propio archivo |
+| `datos/ajuste_parque.py` | Aplica los factores de parque evento por evento. Los CSV de origen están en `datos/parque/` |
 | `datos/analisis.py` | Percentiles, tiers, auditoría de cupos y agregados por equipo → `src/data.json` |
 
 Los scripts se corren en la máquina del usuario: el servicio de estadísticas está bloqueado en

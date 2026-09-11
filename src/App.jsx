@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  ScatterChart, Scatter, ZAxis, LineChart, Line, ReferenceLine, ReferenceArea, Cell, LabelList,
+  ScatterChart, Scatter, ZAxis, LineChart, Line, ReferenceLine, ReferenceArea, Cell, LabelList, ErrorBar,
 } from "recharts";
 import DATA from "./data.json";
 
@@ -51,6 +51,7 @@ const POS_CORTO = {
 
 const METRICS = {
   hit: [
+    { key: "wobaAj", label: "wOBA aj.", dec: 3, dir: 1, soloAj: true, largo: "wOBA ajustada por el parque de cada equipo" },
     { key: "woba", label: "wOBA", dec: 3, dir: 1, largo: "wOBA — cada evento ofensivo pesado por las carreras que realmente produce" },
     { key: "ops", label: "OPS", dec: 3, dir: 1, largo: "OPS — embasarse más poder, sumados sin ponderar" },
     { key: "obp", label: "OBP", dec: 3, dir: 1, largo: "Porcentaje de embasarse" },
@@ -58,6 +59,8 @@ const METRICS = {
     { key: "hr", label: "HR", dec: 0, dir: 1, largo: "Cuadrangulares" },
   ],
   pitch: [
+    { key: "fipAj", label: "FIP aj.", dec: 2, dir: -1, soloAj: true, largo: "FIP ajustado por el parque de cada equipo" },
+    { key: "kbbAj", label: "K-BB% aj.", dec: 1, dir: 1, soloAj: true, largo: "Ponches menos boletos, ajustado por parque" },
     { key: "fip", label: "FIP", dec: 2, dir: -1, largo: "FIP — la efectividad que corresponde a lo que el lanzador sí controla: ponches, boletos y cuadrangulares" },
     { key: "kbb", label: "K-BB%", dec: 1, dir: 1, largo: "Ponches menos boletos, como porcentaje de bateadores enfrentados. La medida más estable de habilidad" },
     { key: "era", label: "ERA", dec: 2, dir: -1, largo: "Efectividad — incluye defensa, parque y secuencia" },
@@ -84,6 +87,12 @@ const fmt = (v, dec) =>
     : dec === 3 ? Number(v).toFixed(3).replace(/^0\./, ".") : Number(v).toFixed(dec);
 
 const ord = (n) => `${n}.º`;
+
+/* El tablero entero se puede ver crudo o descontando el parque. Estas dos
+   funciones son el unico lugar donde vive esa decision. */
+const PRINCIPAL = { crudo: { hit: "woba", pitch: "fip" }, aj: { hit: "wobaAj", pitch: "fipAj" } };
+const principalDe = (kind, modo) => PRINCIPAL[modo][kind];
+const pctDe = (d, kind, modo) => d["p_" + principalDe(kind, modo)];
 
 function tierOf(rank, total) {
   const p = rank / total;
@@ -250,12 +259,15 @@ function PercentileBar({ label, largo, raw, pct }) {
   );
 }
 
-function PlayerCard({ p, onClick }) {
+function PlayerCard({ p, onClick, modo }) {
   const kind = p.kind;
-  const main = kind === "hit" ? "woba" : "fip";
-  const mainPct = kind === "hit" ? p.p_woba : p.p_fip;
-  const m = METRICS[kind][0];
-  const t = TIERS[tierOf(p.rank, p.total)];
+  const main = principalDe(kind, modo);
+  const mainPct = pctDe(p, kind, modo);
+  const m = METRICS[kind].find((x) => x.key === main);
+  const tierNombre = modo === "aj"
+    ? ((mainPct ?? 0) >= 67 ? "Fortaleza" : (mainPct ?? 0) >= 34 ? "Promedio" : "Oportunidad")
+    : tierOf(p.rank, p.total);
+  const t = TIERS[tierNombre];
   return (
     <button className="card" onClick={onClick} style={{
       flex: "0 0 258px", width: 258, textAlign: "left", cursor: "pointer",
@@ -285,8 +297,8 @@ function PlayerCard({ p, onClick }) {
       <div style={{ marginTop: 11, display: "flex", gap: 6, flexWrap: "wrap" }}>
         <Chip color={t.color}>{t.label}</Chip>
         {!p.mexicano && (
-          <Chip color={gsnColor(p.gsn)} title="Rendimiento del cupo de importado frente al jugador mexicano mediano de esta posición">
-            {p.gsn > 0 ? "Cupo rentable" : "Cupo no rentable"}
+          <Chip color={gsnColor(modo === "aj" ? p.gsnAj : p.gsn)} title="Rendimiento del cupo de importado frente al jugador mexicano mediano de esta posición">
+            {(modo === "aj" ? p.gsnAj : p.gsn) > 0 ? "Cupo rentable" : "Cupo no rentable"}
           </Chip>
         )}
       </div>
@@ -303,34 +315,37 @@ const box = {
 const Tip = ({ children }) => <div style={box}>{children}</div>;
 
 /* ============================================================ diagnostico */
-function CuadranteEquipos({ eqs }) {
+function CuadranteEquipos({ eqs, modo }) {
+  const aj = modo === "aj";
+  const kO = aj ? "wobaAj" : "woba", kF = aj ? "fipAj" : "fip";
+  const rO = aj ? "rank_wobaAj" : "rank_woba", rF = aj ? "rank_fipAj" : "rank_fip";
   const mid = {
-    woba: eqs.reduce((a, e) => a + e.woba, 0) / eqs.length,
-    fip: eqs.reduce((a, e) => a + e.fip, 0) / eqs.length,
+    woba: eqs.reduce((a, e) => a + e[kO], 0) / eqs.length,
+    fip: eqs.reduce((a, e) => a + e[kF], 0) / eqs.length,
   };
-  const minO = Math.min(...eqs.map((e) => e.woba)), maxO = Math.max(...eqs.map((e) => e.woba));
-  const minE = Math.min(...eqs.map((e) => e.fip)), maxE = Math.max(...eqs.map((e) => e.fip));
+  const minO = Math.min(...eqs.map((e) => e[kO])), maxO = Math.max(...eqs.map((e) => e[kO]));
+  const minE = Math.min(...eqs.map((e) => e[kF])), maxE = Math.max(...eqs.map((e) => e[kF]));
   // Cuantos equipos comparten el cuadrante y que tan lejos queda Tigres del siguiente.
   const yo = eqs.find((e) => e.equipo === "Tigres");
-  const peorQueYo = eqs.filter((e) => e.woba < yo.woba).length;
+  const peorQueYo = eqs.filter((e) => e[kO] < yo[kO]).length;
   return (
     <Panel
       title="Los 20 equipos en un solo cuadro"
-      sub={`wOBA del equipo en el eje horizontal, FIP en el vertical (invertido: arriba es mejor pitcheo). Ambas medidas descuentan el ruido: wOBA pesa cada evento por las carreras que produce y FIP se queda solo con lo que el lanzador controla. Tigres queda abajo a la izquierda: ${peorQueYo === 0 ? "nadie en la liga batea peor" : `solo ${peorQueYo} equipo${peorQueYo > 1 ? "s batean" : " batea"} peor`}, y el pitcheo tampoco alcanza el promedio.`}
+      sub={`${aj ? "wOBA ajustada por parque" : "wOBA"} del equipo en el eje horizontal, ${aj ? "FIP ajustado" : "FIP"} en el vertical (invertido: arriba es mejor pitcheo). Ambas medidas descuentan el ruido: wOBA pesa cada evento por las carreras que produce y FIP se queda solo con lo que el lanzador controla. Tigres queda abajo a la izquierda: ${peorQueYo === 0 ? "nadie en la liga batea peor" : `solo ${peorQueYo} equipo${peorQueYo > 1 ? "s batean" : " batea"} peor`}, y el pitcheo tampoco alcanza el promedio.`}
     >
       <ResponsiveContainer width="100%" height={430}>
         <ScatterChart margin={{ top: 14, right: 26, left: 2, bottom: 26 }}>
           <CartesianGrid stroke={C.line} strokeDasharray="2 4" />
           <ReferenceArea x1={minO - .01} x2={mid.woba} y1={minE - .1} y2={mid.fip}
             fill={C.mal} fillOpacity={.05} stroke="none" />
-          <XAxis type="number" dataKey="woba" domain={[minO - .006, maxO + .006]}
+          <XAxis type="number" dataKey={kO} domain={[minO - .006, maxO + .006]}
             tick={{ fill: C.ink3, fontSize: 11 }} axisLine={{ stroke: C.line }} tickLine={false}
             tickFormatter={(v) => fmt(v, 3)}
-            label={{ value: "wOBA del equipo  →  más ofensiva", position: "insideBottom", offset: -14, fill: C.ink3, fontSize: 11.5 }} />
-          <YAxis type="number" dataKey="fip" reversed domain={[minE - .15, maxE + .15]}
+            label={{ value: (aj ? "wOBA ajustada  →  más ofensiva" : "wOBA del equipo  →  más ofensiva"), position: "insideBottom", offset: -14, fill: C.ink3, fontSize: 11.5 }} />
+          <YAxis type="number" dataKey={kF} reversed domain={[minE - .15, maxE + .15]}
             tickCount={6} tickFormatter={(v) => Number(v).toFixed(2)} allowDecimals
             tick={{ fill: C.ink3, fontSize: 11 }} axisLine={false} tickLine={false}
-            label={{ value: "↑ mejor pitcheo   (FIP)", angle: -90, position: "insideLeft", offset: 16, fill: C.ink3, fontSize: 11.5 }} />
+            label={{ value: (aj ? "↑ mejor pitcheo   (FIP ajustado)" : "↑ mejor pitcheo   (FIP)"), angle: -90, position: "insideLeft", offset: 16, fill: C.ink3, fontSize: 11.5 }} />
           <ZAxis range={[110, 110]} />
           <ReferenceLine x={mid.woba} stroke={C.line2} strokeDasharray="4 4" />
           <ReferenceLine y={mid.fip} stroke={C.line2} strokeDasharray="4 4" />
@@ -341,8 +356,8 @@ function CuadranteEquipos({ eqs }) {
               return (
                 <Tip>
                   <div className="disp" style={{ fontSize: 16, fontWeight: 600 }}>{d.equipo}</div>
-                  <div className="num">wOBA {fmt(d.woba, 3)} · {ord(d.rank_woba)} de 20</div>
-                  <div className="num">FIP {fmt(d.fip, 2)} · {ord(d.rank_fip)} de 20</div>
+                  <div className="num">wOBA {fmt(d[kO], 3)} · {ord(d[rO])} de 20</div>
+                  <div className="num">FIP {fmt(d[kF], 2)} · {ord(d[rF])} de 20</div>
                   <div className="num" style={{ color: C.ink3 }}>
                     ERA {fmt(d.era, 2)} ({ord(d.rank_era)}) · K-BB% {fmt(d.kbb, 1)} ({ord(d.rank_kbb)})
                   </div>
@@ -370,13 +385,15 @@ function CuadranteEquipos({ eqs }) {
   );
 }
 
-function MapaPosiciones({ jug, ir }) {
+function MapaPosiciones({ jug, ir, modo }) {
   const filas = [...HIT_POS, ...PIT_POS].map((pos) => {
     const grupo = jug.filter((d) => d.pos === pos);
     const mios = grupo.filter((d) => d.esTigre);
     const kind = HIT_POS.includes(pos) ? "hit" : "pitch";
-    const mejor = mios.length ? mios.reduce((a, b) => (a.rank < b.rank ? a : b)) : null;
-    const p = mejor ? (kind === "hit" ? mejor.p_woba : mejor.p_fip) : null;
+    const mejor = mios.length
+      ? mios.reduce((a, b) => ((pctDe(a, kind, modo) ?? -1) >= (pctDe(b, kind, modo) ?? -1) ? a : b))
+      : null;
+    const p = mejor ? pctDe(mejor, kind, modo) : null;
     return { pos, kind, mejor, pct: p, n: mios.length, total: grupo.length };
   });
   return (
@@ -504,58 +521,267 @@ function Espejismo({ eqs, jug }) {
   );
 }
 
-function Diagnostico({ ir, year, jug, aud, eqs }) {
-  const t = DATA.tendencia;
-  const yo = eqs.find((e) => e.equipo === "Tigres");
-  const rankData = t.map((d) => ({
-    year: d.year,
-    Bateo: 21 - d.wobaRank,
-    "Pitcheo (FIP)": 21 - d.fipRank,
-    "Pitcheo (efectividad)": 21 - d.eraRank,
-    wobaRank: d.wobaRank, fipRank: d.fipRank, eraRank: d.eraRank,
+function ElParque({ eqs, ir }) {
+  const yo = DATA.parques.find((p) => p.equipo === "Tigres");
+  const orden = DATA.parques.map((d) => ({
+    ...d,
+    desv: +((d.factor - 1) * 100).toFixed(1),
+    err: [+((d.factor - d.icBajo) * 100).toFixed(1), +((d.icAlto - d.factor) * 100).toFixed(1)],
   }));
-  const miHit = aud.find((a) => a.kind === "hit" && a.equipo === "Tigres");
-  const bats = jug.filter((d) => d.esTigre && d.kind === "hit");
-  const totalBat = bats.length;
-  const sobreMedia = bats.filter((d) => (d.p_woba ?? 0) > 50).length;
-
+  const pf3 = (v) => Number(v).toFixed(3);
+  const ev = [
+    ["2B", "Dobles"], ["3B", "Triples"], ["sencillos", "Sencillos"],
+    ["BB", "Bases por bola"], ["golpeado", "Golpeados"], ["HR", "Cuadrangulares"], ["K", "Ponches"],
+  ];
   return (
     <div>
       <Panel style={{ background: `linear-gradient(150deg,${C.panel},${C.panel2})`, borderLeft: `3px solid ${C.tigres}` }}>
-        <h2 className="disp" style={{ margin: "0 0 12px", fontSize: 30, fontWeight: 600, lineHeight: 1.2 }}>
-          La ofensiva es la peor de la liga. El pitcheo no es la fortaleza que parece.
+        <h2 className="disp" style={{ margin: "0 0 12px", fontSize: 29, fontWeight: 600, lineHeight: 1.2 }}>
+          Tigres juega en el tercer parque más difícil de la liga. Eso distorsiona todo lo demás.
         </h2>
-        <p style={{ margin: 0, fontSize: 15, color: C.ink2, lineHeight: 1.75, maxWidth: 820 }}>
-          En {year} Tigres terminó <b style={{ color: C.mal }}>{ord(yo.rank_woba)} de 20 en wOBA</b>, con una
-          ofensiva <b>{100 - yo.opsPlus}% por debajo del promedio de la liga</b>. El pitcheo cerró con una
-          efectividad de {fmt(yo.era, 2)} —{ord(yo.rank_era)} lugar— pero su FIP, que solo cuenta lo que los
-          lanzadores controlan, es {fmt(yo.fip, 2)}: <b style={{ color: C.mal }}>{ord(yo.rank_fip)} de 20</b>.
-          El equipo no tiene una mitad sana y otra rota. Tiene una mitad rota y otra que se ve mejor de lo que es.
+        <p style={{ margin: 0, fontSize: 15, color: C.ink2, lineHeight: 1.75, maxWidth: 830 }}>
+          El Beto Ávila de Cancún tiene un <b>factor de carreras de {Number(yo.factor).toFixed(3)}</b> sobre{" "}
+          {yo.juegos} juegos de casa: se anota un <b>{Math.round((1 - yo.factor) * 100)}% menos</b> que
+          en un parque promedio de la LMB. Tigres juega ahí la mitad de su calendario, así que sus
+          bateadores se ven peor de lo que son y sus lanzadores mejor de lo que son. Comparar sus
+          números crudos contra el resto de la liga mide el estadio tanto como al jugador.
         </p>
       </Panel>
 
       <div className="kpis" style={{ marginBottom: 18 }}>
-        <StatTile label="Ofensiva contra la liga" value={yo.opsPlus} unit="OPS+" big
-          tone={yo.opsPlus < 95 ? C.mal : C.ink}
-          foot={`100 es el promedio de la liga · ${ord(yo.rank_woba)} de 20 en wOBA`} />
+        <StatTile label="Factor de carreras" value={Number(yo.factor).toFixed(3)} big tone={C.tigres}
+          foot={`3.º parque más difícil de 21 · IC 95% de ${Number(yo.icBajo).toFixed(3)} a ${Number(yo.icAlto).toFixed(3)}`} />
+        <StatTile label="Altitud del Beto Ávila" value={yo.altitud} unit="m"
+          foot="La altitud explica el 94% de la variación entre sedes de la liga" />
+        <StatTile label="Juegos analizados" value="5,318" foot="Temporadas 2021–2026, MLB Stats API" />
+      </div>
+
+      <Panel
+        title="Los 21 parques de la liga"
+        sub="Cuánto se anota en cada sede frente al parque promedio de la liga. Las líneas finas sobre cada barra son el intervalo de confianza del 95%."
+      >
+        <ResponsiveContainer width="100%" height={520}>
+          <BarChart data={orden} layout="vertical" margin={{ top: 4, right: 40, left: 96, bottom: 16 }}>
+            <CartesianGrid stroke={C.line} strokeDasharray="2 4" horizontal={false} />
+            <XAxis type="number" domain={[-42, 46]} ticks={[-40, -20, 0, 20, 40]}
+              tickFormatter={(v) => (v > 0 ? "+" : "") + v + "%"}
+              tick={{ fill: C.ink3, fontSize: 11 }} axisLine={{ stroke: C.line }} tickLine={false}
+              label={{ value: "← se anota menos que en el parque promedio          se anota más →", position: "insideBottom", offset: -8, fill: C.ink3, fontSize: 11 }} />
+            <YAxis type="category" dataKey="equipo" width={92} interval={0}
+              tick={{ fill: C.ink2, fontSize: 10.5 }} axisLine={false} tickLine={false} />
+            <Tooltip cursor={{ fill: "rgba(255,255,255,.045)" }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const d = payload[0].payload;
+                return (
+                  <Tip>
+                    <div className="disp" style={{ fontSize: 16, fontWeight: 600 }}>{d.equipo}</div>
+                    <div style={{ color: C.ink3 }}>{d.sede} · {d.altitud} m</div>
+                    <div className="num">Factor <b>{pf3(d.factor)}</b> · IC [{pf3(d.icBajo)}, {pf3(d.icAlto)}]</div>
+                    <div className="num" style={{ color: C.ink3 }}>{d.juegos} juegos de casa</div>
+                  </Tip>
+                );
+              }} />
+            <ReferenceLine x={0} stroke={C.ink2} />
+            <Bar dataKey="desv" barSize={13} isAnimationActive={false}>
+              {orden.map((d) => (
+                <Cell key={d.equipo} fill={d.equipo === "Tigres" ? C.tigres : C.neutro}
+                  stroke={C.bg} strokeWidth={2} />
+              ))}
+              <ErrorBar dataKey="err" direction="x" width={5} strokeWidth={1.4} stroke={C.ink3} />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </Panel>
+
+      <Panel
+        title="Qué reprime exactamente el Beto Ávila"
+        sub="Factor por tipo de evento en Cancún. 1.00 es neutral. El parque no mata el poder: mata el contacto y regala ponches."
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(132px,1fr))", gap: 9 }}>
+          {ev.map(([k, etiqueta]) => {
+            const v = yo.eventos[k];
+            const malo = k === "K" ? v > 1 : v < 1;
+            return (
+              <div key={k} style={{
+                background: C.panel2, border: `1px solid ${C.line}`,
+                borderLeft: `3px solid ${malo ? C.mal : C.neutro2}`,
+                borderRadius: 11, padding: "11px 12px",
+              }}>
+                <div style={{ fontSize: 10.5, color: C.ink3, fontWeight: 700, letterSpacing: .5, textTransform: "uppercase" }}>{etiqueta}</div>
+                <div className="disp num" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1, marginTop: 5, color: malo ? C.mal : C.ink }}>
+                  {Number(v).toFixed(3)}
+                </div>
+                <div style={{ fontSize: 10.5, color: C.ink3, marginTop: 4 }}>
+                  {v === 1 ? "neutral" : `${v > 1 ? "+" : "−"}${Math.abs(Math.round((v - 1) * 100))}%`}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p style={{ fontSize: 13, color: C.ink2, lineHeight: 1.75, marginTop: 14, marginBottom: 0, maxWidth: 850 }}>
+          Los cuadrangulares salen igual que en cualquier parque, pero los dobles caen tres de cada
+          diez y los ponches suben casi 18%. Es un parque que castiga al bateador de contacto y
+          maquilla al lanzador que no poncha — que es exactamente el perfil del cuerpo de lanzadores
+          de Tigres.
+        </p>
+      </Panel>
+
+      <Panel title="Lo que esto significa al construir el roster">
+        <ol className="reco" style={{ margin: 0, paddingLeft: 0, listStyle: "none", counterReset: "r" }}>
+          {[
+            ["No cortar bateadores por sus números en casa.", "Un bateador de Tigres con .340 de wOBA vale lo mismo que uno de .365 en un parque promedio. Los propios se ven peor de lo que son."],
+            ["No pagarle a un lanzador por su efectividad en Cancún.", "El parque le regala casi un 18% más de ponches y le quita tres de cada diez dobles. Ese número no viaja."],
+            ["Descontar a los bateadores que llegan de parques altos.", "CDMX (1.38), Puebla (1.27) y Durango (1.24) inflan la ofensiva. Un .900 de OPS allá no es un .900 aquí."],
+            ["Pagar de más por bateadores de parques bajos.", "Tabasco (0.68), Yucatán (0.70) y Cancún esconden talento ofensivo. Ahí está el mercado barato, y está en la misma zona."],
+          ].map(([t, d], i) => (
+            <li key={i} style={{ counterIncrement: "r", marginBottom: 11, paddingLeft: 28, position: "relative" }}>
+              <span style={{
+                position: "absolute", left: 0, top: 1, width: 20, height: 20, borderRadius: "50%",
+                background: C.tigres, color: C.bg, display: "flex", alignItems: "center",
+                justifyContent: "center", fontSize: 11, fontWeight: 800,
+              }}>{i + 1}</span>
+              <b style={{ color: C.ink }}>{t}</b>{" "}
+              <span style={{ color: C.ink2, fontSize: 13.5 }}>{d}</span>
+            </li>
+          ))}
+        </ol>
+        <p style={{ fontSize: 12.5, color: C.ink3, lineHeight: 1.7, marginTop: 14, marginBottom: 0, maxWidth: 850 }}>
+          Jugar en un parque extremo es una desventaja competitiva si se ignora y una ventaja de
+          mercado si se mide. Es la única de estas conclusiones que ningún otro club de la liga puede
+          copiar, porque depende de dónde juega Tigres.
+        </p>
+      </Panel>
+
+      <Sensibilidad />
+    </div>
+  );
+}
+
+/* La seccion honesta: cuanto cambia el diagnostico segun como se mida, y que
+   tan robusta es la conclusion dentro del intervalo de confianza del parque. */
+function Sensibilidad() {
+  const S = DATA.sensibilidad;
+  const th = { textAlign: "right", padding: "9px 11px", color: C.ink3, fontSize: 10.5, fontWeight: 700, letterSpacing: .6, textTransform: "uppercase", borderBottom: `1px solid ${C.line2}`, whiteSpace: "nowrap" };
+  const td = { textAlign: "right", padding: "9px 11px", fontSize: 13, borderBottom: `1px solid ${C.panel2}` };
+  return (
+    <Panel
+      title="Cuánto cambia el diagnóstico según cómo se mida"
+      sub="El factor del parque es una estimación con intervalo de confianza, no un número exacto. Aquí están las conclusiones de Tigres recalculadas en los dos extremos de ese intervalo, para ver si alguna se da la vuelta."
+    >
+      <div className="scrollx">
+        <table style={{ minWidth: 620 }}>
+          <thead>
+            <tr>
+              <th style={{ ...th, textAlign: "left" }}>Escenario</th>
+              <th style={th}>Factor</th>
+              <th style={th}>wOBA</th>
+              <th style={th}>OPS+</th>
+              <th style={th}>FIP</th>
+              <th style={th}>K-BB%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {S.map((e, i) => (
+              <tr key={e.etiqueta} style={{ background: i === 2 ? C.tigresSoft : "transparent" }}>
+                <td style={{ ...td, textAlign: "left", fontWeight: i === 2 ? 700 : 500, color: i === 2 ? C.tigres : C.ink }}>
+                  {e.etiqueta}
+                </td>
+                <td className="num" style={{ ...td, color: C.ink2 }}>{Number(e.pf).toFixed(3)}</td>
+                <td className="num" style={td}>{fmt(e.woba, 3)}</td>
+                <td className="num" style={{ ...td, fontWeight: 700, color: e.opsPlus < 95 ? C.mal : C.ink }}>{e.opsPlus}</td>
+                <td className="num" style={td}>{fmt(e.fip, 2)}</td>
+                <td className="num" style={{ ...td, fontWeight: 700, color: e.kbb < 8 ? C.mal : C.ink }}>{fmt(e.kbb, 1)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ fontSize: 13, color: C.ink2, lineHeight: 1.75, marginTop: 14, marginBottom: 0, maxWidth: 860 }}>
+        <b style={{ color: C.ink }}>Ninguna conclusión se da la vuelta dentro del intervalo.</b> En el
+        escenario más conservador —suponer que el parque es mucho menos extremo de lo estimado— la
+        ofensiva sigue por debajo del promedio (OPS+ 83) y el K-BB% sigue cayendo de 8.4 a 6.9. En el
+        más agresivo, la ofensiva llega a 90 y el pitcheo empeora todavía más. La dirección es la
+        misma en todo el rango; lo único que se mueve es la magnitud.
+      </p>
+      <p style={{ fontSize: 12, color: C.ink3, lineHeight: 1.7, marginTop: 10, marginBottom: 0, maxWidth: 860 }}>
+        Hay una razón para pensar que el ajuste se queda corto y no largo: el método de los factores
+        de parque comprime, porque el denominador de cada sede incluye juegos en otras sedes con sus
+        propios efectos. Los factores son un piso. Aun así, el tablero publica siempre las dos
+        versiones —cruda y ajustada— con el interruptor del encabezado, para que cualquiera pueda ver
+        de dónde sale cada número.
+      </p>
+    </Panel>
+  );
+}
+
+function Diagnostico({ ir, year, jug, aud, eqs, modo }) {
+  const aj = modo === "aj";
+  const t = DATA.tendencia;
+  const yo = eqs.find((e) => e.equipo === "Tigres");
+  const rankData = t.map((d) => ({
+    year: d.year,
+    Bateo: 21 - (aj ? d.wobaAjRank : d.wobaRank),
+    "Pitcheo (FIP)": 21 - (aj ? d.fipAjRank : d.fipRank),
+    "Pitcheo (efectividad)": 21 - d.eraRank,
+    wobaRank: aj ? d.wobaAjRank : d.wobaRank, fipRank: aj ? d.fipAjRank : d.fipRank, eraRank: d.eraRank,
+  }));
+  const miHit = aud.find((a) => a.kind === "hit" && a.equipo === "Tigres");
+  const bats = jug.filter((d) => d.esTigre && d.kind === "hit");
+  const totalBat = bats.length;
+  const sobreMedia = bats.filter((d) => (pctDe(d, "hit", modo) ?? 0) > 50).length;
+  const ops = aj ? yo.opsPlusAj : yo.opsPlus;
+  const rkO = aj ? yo.rank_wobaAj : yo.rank_woba;
+  const fip = aj ? yo.fipAj : yo.fip;
+  const rkF = aj ? yo.rank_fipAj : yo.rank_fip;
+  const kbb = aj ? yo.kbbAj : yo.kbb;
+  const rkK = aj ? yo.rank_kbbAj : yo.rank_kbb;
+
+  return (
+    <div>
+      <Panel style={{ background: `linear-gradient(150deg,${C.panel},${C.panel2})`, borderLeft: `3px solid ${C.tigres}` }}>
+        <h2 className="disp" style={{ margin: "0 0 12px", fontSize: 29, fontWeight: 600, lineHeight: 1.2 }}>
+          {aj ? "Descontado el parque, el problema crónico es el pitcheo."
+            : "Los números crudos dicen que la ofensiva es la peor de la liga."}
+        </h2>
+        <p style={{ margin: 0, fontSize: 15, color: C.ink2, lineHeight: 1.75, maxWidth: 830 }}>
+          {aj ? (
+            <>En {year}, con el parque descontado, la ofensiva de Tigres queda{" "}
+              <b>{ord(rkO)} de 20</b> con un OPS+ de <b>{ops}</b> — mala, pero no la catástrofe que
+              sugieren los números crudos. El pitcheo, en cambio, cae a <b style={{ color: C.mal }}>{ord(rkF)} por FIP</b>{" "}
+              y su K-BB% queda <b style={{ color: C.mal }}>{ord(rkK)} de 20</b>. El parque estaba
+              escondiendo la mitad del diagnóstico en cada dirección.</>
+          ) : (
+            <>En {year} Tigres terminó <b style={{ color: C.mal }}>{ord(rkO)} de 20 en wOBA</b>, con un
+              OPS+ de <b>{ops}</b>, y {ord(rkF)} de 20 en FIP. Pero Tigres juega la mitad de su
+              calendario en el tercer parque más difícil de la liga.{" "}
+              <b>Activa el ajuste por parque en el encabezado</b> y estos mismos números cuentan otra historia.</>
+          )}
+        </p>
+      </Panel>
+
+      <div className="kpis" style={{ marginBottom: 18 }}>
+        <StatTile label="Ofensiva contra la liga" value={ops} unit="OPS+" big
+          tone={ops < 95 ? C.mal : C.ink}
+          foot={`100 es el promedio · ${ord(rkO)} de 20 en wOBA`} />
         <StatTile label="Bateadores sobre la media" value={`${sobreMedia}`} unit={`de ${totalBat}`}
           tone={sobreMedia / Math.max(totalBat, 1) < .4 ? C.mal : C.ink}
           foot="Calificados que superan el percentil 50 de su posición" />
         <StatTile label="Cuadrangulares" value={yo.hr} tone={yo.rank_hr > 14 ? C.mal : C.ink}
-          foot={`${ord(yo.rank_hr)} de 20 en la liga`} />
-        <StatTile label="Pitcheo · FIP" value={fmt(yo.fip, 2)} tone={yo.rank_fip > 12 ? C.mal : C.neutro2}
-          foot={`${ord(yo.rank_fip)} de 20 · la efectividad de ${fmt(yo.era, 2)} dice ${ord(yo.rank_era)}`} />
-        <StatTile label="Ponches menos boletos" value={fmt(yo.kbb, 1)} unit="%" tone={yo.rank_kbb > 12 ? C.mal : C.bien}
-          foot={`${ord(yo.rank_kbb)} de 20 · la habilidad más estable del lanzador`} />
+          foot={`${ord(yo.rank_hr)} de 20 · el parque es neutral en poder`} />
+        <StatTile label="Pitcheo · FIP" value={fmt(fip, 2)} tone={rkF > 12 ? C.mal : C.neutro2}
+          foot={`${ord(rkF)} de 20 · la efectividad de ${fmt(yo.era, 2)} dice ${ord(yo.rank_era)}`} />
+        <StatTile label="Ponches menos boletos" value={fmt(kbb, 1)} unit="%" tone={rkK > 12 ? C.mal : C.bien}
+          foot={`${ord(rkK)} de 20 · la habilidad más estable del lanzador`} />
         <StatTile label="Cupos importados · bateo" value={ord(miHit.rank)} unit="de 20" tone={gsnColor(miHit.gsn)}
           foot={`${miHit.gsn > 0 ? "+" : ""}${fmt(miHit.gsn, 3)} de wOBA sobre el mexicano mediano`} />
       </div>
 
-      <CuadranteEquipos eqs={eqs} />
+      <CuadranteEquipos eqs={eqs} modo={modo} />
 
       <Panel
-        title="Tres años: una mitad hundida y otra que solo parecía subir"
-        sub="Lugar de Tigres entre los 20 equipos. Más alto es mejor. La línea gruesa del pitcheo es el FIP; la delgada es la efectividad. La distancia entre las dos es lo que la defensa, el parque y la suerte pusieron."
+        title={aj ? "Tres años con el parque descontado" : "Tres años, tres formas de medir lo mismo"}
+        sub="Lugar de Tigres entre los 20 equipos. Más alto es mejor. La línea gruesa del pitcheo es el FIP; la delgada, la efectividad."
       >
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={rankData} margin={{ top: 10, right: 22, left: -12, bottom: 4 }}>
@@ -575,22 +801,23 @@ function Diagnostico({ ir, year, jug, aud, eqs }) {
               dot={{ r: 5, fill: C.mal, stroke: C.bg, strokeWidth: 2 }} />
           </LineChart>
         </ResponsiveContainer>
-        <Leyenda items={[[C.mal, "Bateo (wOBA)", true], [C.bien, "Pitcheo (FIP)", true],
-        [C.neutro2, "Pitcheo (efectividad)", true]]} />
-        <p style={{ fontSize: 13, color: C.ink2, lineHeight: 1.75, marginTop: 12, marginBottom: 0, maxWidth: 840 }}>
-          Medido por efectividad, el pitcheo sube del lugar 13 al 6 en tres temporadas y parece un
-          proyecto que va bien. Medido por FIP no se mueve: 13.º, 11.º, 12.º. Lo que mejoró no fue el
-          pitcheo. El bateo, mientras tanto, fue 20.º, 19.º y 20.º.
+        <Leyenda items={[[C.mal, aj ? "Bateo (wOBA ajustada)" : "Bateo (wOBA)", true],
+        [C.bien, aj ? "Pitcheo (FIP ajustado)" : "Pitcheo (FIP)", true],
+        [C.neutro2, "Pitcheo (efectividad, sin ajustar)", true]]} />
+        <p style={{ fontSize: 13, color: C.ink2, lineHeight: 1.75, marginTop: 12, marginBottom: 0, maxWidth: 850 }}>
+          {aj
+            ? "Con el parque descontado la ofensiva es 18.ª, 10.ª y 18.ª: mala, con un 2025 de media tabla. El K-BB% del pitcheo, en cambio, lleva tres años entre el 17.º y el 20.º lugar. Ese es el problema que no se ha movido."
+            : "Medido por efectividad el pitcheo sube del 13.º al 6.º y parece un proyecto que va bien. Medido por FIP no se mueve: 13.º, 11.º, 12.º. Lo que mejoró no fue el pitcheo."}
         </p>
       </Panel>
 
-      <MapaPosiciones jug={jug} ir={ir} />
+      <MapaPosiciones jug={jug} ir={ir} modo={modo} />
 
       <Espejismo eqs={eqs} jug={jug} />
 
       <Panel title="A dónde ir desde aquí">
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {[["cupos", "La auditoría de cupos de importado"], ["hit", "El detalle del bateo"], ["plan", "El plan 2027"]].map(([k, l]) => (
+          {[["parque", "El parque y lo que distorsiona"], ["cupos", "La auditoría de cupos"], ["plan", "El plan 2027"]].map(([k, l]) => (
             <button key={k} className="tab" onClick={() => ir(k)} style={{
               background: "transparent", border: `1px solid ${C.tigres}`, color: C.tigres,
               borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600,
@@ -657,12 +884,13 @@ function Tabla({ rows, kind, buscador = true }) {
   );
 }
 
-function PositionDetail({ pos, kind, jug, onClose }) {
+function PositionDetail({ pos, kind, jug, modo, onClose }) {
   const grupo = useMemo(() => jug.filter((d) => d.pos === pos && d.kind === kind), [pos, kind, jug]);
   const mios = grupo.filter((d) => d.esTigre);
   const [sel, setSel] = useState(mios[0]?.pid ?? grupo[0]?.pid);
-  const [statKey, setStatKey] = useState(METRICS[kind][0].key);
+  const [statKey, setStatKey] = useState(principalDe(kind, modo));
   useEffect(() => { setSel(mios[0]?.pid ?? grupo[0]?.pid); }, [pos, kind]);
+  useEffect(() => { setStatKey(principalDe(kind, modo)); }, [modo, kind]);
   const metric = METRICS[kind].find((m) => m.key === statKey);
   const jugador = grupo.find((d) => d.pid === sel) || grupo[0];
 
@@ -719,8 +947,8 @@ function PositionDetail({ pos, kind, jug, onClose }) {
                       {TIERS[tierOf(jugador.rank, jugador.total)].label}
                     </Chip>
                     {!jugador.mexicano && (
-                      <Chip color={gsnColor(jugador.gsn)}>
-                        Cupo {jugador.gsn > 0 ? "rentable" : "no rentable"}
+                      <Chip color={gsnColor(modo === "aj" ? jugador.gsnAj : jugador.gsn)}>
+                        Cupo {(modo === "aj" ? jugador.gsnAj : jugador.gsn) > 0 ? "rentable" : "no rentable"}
                       </Chip>
                     )}
                   </div>
@@ -861,20 +1089,25 @@ function Leyenda({ items }) {
 }
 
 /* ======================================================== vista por grupo */
-function VistaGrupo({ kind, jug, abierta, setAbierta }) {
+function VistaGrupo({ kind, jug, abierta, setAbierta, modo }) {
   const [sub, setSub] = useState("fort");
   const poss = kind === "hit" ? HIT_POS : PIT_POS;
 
+  // En modo ajustado el orden y los tiers salen del percentil ya descontado el parque.
+  const posicionRel = (d) => (modo === "aj" ? 1 - (pctDe(d, kind, modo) ?? 0) / 100 : d.rank / d.total);
+  const tierDe = (d) => (modo === "aj"
+    ? ((pctDe(d, kind, modo) ?? 0) >= 67 ? "Fortaleza" : (pctDe(d, kind, modo) ?? 0) >= 34 ? "Promedio" : "Oportunidad")
+    : tierOf(d.rank, d.total));
   const mios = useMemo(
-    () => jug.filter((d) => d.esTigre && d.kind === kind).sort((a, b) => a.rank / a.total - b.rank / b.total),
-    [kind, jug]
+    () => jug.filter((d) => d.esTigre && d.kind === kind).sort((a, b) => posicionRel(a) - posicionRel(b)),
+    [kind, jug, modo]
   );
-  const fort = mios.filter((d) => tierOf(d.rank, d.total) === "Fortaleza");
-  const resto = mios.filter((d) => tierOf(d.rank, d.total) !== "Fortaleza")
-    .sort((a, b) => b.rank / b.total - a.rank / a.total);
+  const fort = mios.filter((d) => tierDe(d) === "Fortaleza");
+  const resto = mios.filter((d) => tierDe(d) !== "Fortaleza")
+    .sort((a, b) => posicionRel(b) - posicionRel(a));
   const huecos = poss.filter((p) => !mios.some((d) => d.pos === p));
 
-  if (abierta) return <PositionDetail pos={abierta} kind={kind} jug={jug} onClose={() => setAbierta(null)} />;
+  if (abierta) return <PositionDetail pos={abierta} kind={kind} jug={jug} modo={modo} onClose={() => setAbierta(null)} />;
 
   const lista = sub === "fort" ? fort : resto;
   const nOpor = resto.length + huecos.length;
@@ -922,7 +1155,7 @@ function VistaGrupo({ kind, jug, abierta, setAbierta }) {
       </p>
 
       <div className="cards">
-        {lista.map((p) => <PlayerCard key={p.pid + p.pos} p={p} onClick={() => setAbierta(p.pos)} />)}
+        {lista.map((p) => <PlayerCard key={p.pid + p.pos} p={p} modo={modo} onClick={() => setAbierta(p.pos)} />)}
         {sub === "opor" && huecos.map((p) => (
           <button key={p} className="card" onClick={() => setAbierta(p)} style={{
             flex: "0 0 258px", width: 258, textAlign: "left", cursor: "pointer", minHeight: 158,
@@ -944,9 +1177,9 @@ function VistaGrupo({ kind, jug, abierta, setAbierta }) {
 }
 
 /* ================================================================= cupos */
-function EdadRendimiento({ jug }) {
+function EdadRendimiento({ jug, modo }) {
   const datos = jug.filter((d) => d.esTigre && d.edad).map((d) => ({
-    ...d, pct: d.kind === "hit" ? d.p_woba : d.p_fip,
+    ...d, pct: pctDe(d, d.kind, modo),
     grupo: d.mexicano ? "mex" : "imp",
   })).filter((d) => d.pct !== null && d.pct !== undefined);
   const mex = datos.filter((d) => d.grupo === "mex");
@@ -1020,13 +1253,16 @@ function EdadRendimiento({ jug }) {
   );
 }
 
-function Cupos({ jug, aud }) {
+function Cupos({ jug, aud, modo }) {
+  const aj = modo === "aj";
+  const kG = aj ? "gsnAj" : "gsn";
+  const kM = { hit: aj ? "wobaAj" : "woba", pitch: aj ? "fipAj" : "fip" };
   const [kind, setKind] = useState("hit");
   const filas = aud.filter((a) => a.kind === kind).sort((a, b) => a.rank - b.rank);
-  const imports = jug.filter((d) => d.esTigre && d.kind === kind && !d.mexicano).sort((a, b) => a.gsn - b.gsn);
-  const nacionales = jug.filter((d) => d.esTigre && d.kind === kind && d.mexicano).sort((a, b) => a.rank / a.total - b.rank / b.total);
+  const imports = jug.filter((d) => d.esTigre && d.kind === kind && !d.mexicano).sort((a, b) => a[kG] - b[kG]);
+  const nacionales = jug.filter((d) => d.esTigre && d.kind === kind && d.mexicano).sort((a, b) => (pctDe(b, kind, modo) ?? 0) - (pctDe(a, kind, modo) ?? 0));
   const dec = kind === "hit" ? 3 : 2;
-  const metrica = kind === "hit" ? "woba" : "fip";
+  const metrica = kM[kind];
   const mio = filas.find((f) => f.equipo === "Tigres");
 
   return (
@@ -1117,8 +1353,8 @@ function Cupos({ jug, aud }) {
             </thead>
             <tbody>
               {imports.map((d) => {
-                const base = kind === "hit" ? d.woba - d.gsn : d.fip + d.gsn;
-                const ok = d.gsn > 0;
+                const base = kind === "hit" ? d[metrica] - d[kG] : d[metrica] + d[kG];
+                const ok = d[kG] > 0;
                 const cel = { padding: "9px 10px", fontSize: 12.5, borderBottom: `1px solid ${C.panel2}` };
                 return (
                   <tr key={d.pid}>
@@ -1128,8 +1364,8 @@ function Cupos({ jug, aud }) {
                     <td className="num" style={{ ...cel, textAlign: "right", color: d.edad >= 33 ? C.mal : C.ink }}>{d.edad ?? "—"}</td>
                     <td className="num" style={{ ...cel, textAlign: "right" }}>{fmt(d[metrica], dec)}</td>
                     <td className="num" style={{ ...cel, textAlign: "right", color: C.ink3 }}>{fmt(base, dec)}</td>
-                    <td className="num" style={{ ...cel, textAlign: "right", fontSize: 13, fontWeight: 800, color: gsnColor(d.gsn) }}>
-                      {d.gsn > 0 ? "+" : ""}{fmt(d.gsn, dec)}
+                    <td className="num" style={{ ...cel, textAlign: "right", fontSize: 13, fontWeight: 800, color: gsnColor(d[kG]) }}>
+                      {d[kG] > 0 ? "+" : ""}{fmt(d[kG], dec)}
                     </td>
                     <td style={{ ...cel, textAlign: "right" }}>
                       <Chip color={ok ? C.bien : C.mal}>{ok ? "Cupo rentable" : "Cupo no rentable"}</Chip>
@@ -1148,7 +1384,7 @@ function Cupos({ jug, aud }) {
         </p>
       </Panel>
 
-      <EdadRendimiento jug={jug} />
+      <EdadRendimiento jug={jug} modo={modo} />
 
       <Panel
         title={`El contraste: los mexicanos de Tigres en ${kind === "hit" ? "el bateo" : "el pitcheo"}`}
@@ -1161,8 +1397,9 @@ function Cupos({ jug, aud }) {
 }
 
 /* ================================================================== plan */
-function Plan() {
+function Plan({ modo }) {
   const jug = DATA.jugadores["2026"];
+  const aj = modo === "aj";
   const huecos = DATA.plan.huecos.filter((h) => h.kind === "hit")
     .sort((a, b) => (a.pctilMejor ?? -1) - (b.pctilMejor ?? -1));
   const [pos, setPos] = useState(huecos[0]?.pos);
@@ -1219,10 +1456,10 @@ function Plan() {
                   <td style={{ padding: "10px 10px", fontSize: 13.5, fontWeight: 700, color: C.tigres }}>{d.nombre}</td>
                   <td style={{ padding: "10px 10px", fontSize: 12.5, color: C.ink2 }}>{pais(d.pais)}</td>
                   <td className="num" style={{ padding: "10px 10px", fontSize: 12.5, textAlign: "right" }}>{d.edad ?? "—"} años</td>
-                  <td className="num" style={{ padding: "10px 10px", fontSize: 12.5, textAlign: "right" }}>wOBA {fmt(d.woba, 3)}</td>
-                  <td className="num" style={{ padding: "10px 10px", fontSize: 12.5, textAlign: "right", color: C.ink2 }}>OPS+ {d.opsPlus}</td>
-                  <td className="num" style={{ padding: "10px 10px", fontSize: 13.5, fontWeight: 800, textAlign: "right", color: pctColor(d.p_woba) }}>
-                    percentil {d.p_woba}
+                  <td className="num" style={{ padding: "10px 10px", fontSize: 12.5, textAlign: "right" }}>wOBA {fmt(aj ? d.wobaAj : d.woba, 3)}</td>
+                  <td className="num" style={{ padding: "10px 10px", fontSize: 12.5, textAlign: "right", color: C.ink2 }}>OPS+ {aj ? d.opsPlusAj : d.opsPlus}</td>
+                  <td className="num" style={{ padding: "10px 10px", fontSize: 13.5, fontWeight: 800, textAlign: "right", color: pctColor(pctDe(d, "hit", modo)) }}>
+                    percentil {pctDe(d, "hit", modo)}
                   </td>
                 </tr>
               ))}
@@ -1368,18 +1605,19 @@ function Metodologia() {
 
 /* =================================================================== app */
 const TABS = [
-  ["diag", "Diagnóstico"], ["hit", "Bateo"], ["pitch", "Pitcheo"],
+  ["diag", "Diagnóstico"], ["parque", "El parque"], ["hit", "Bateo"], ["pitch", "Pitcheo"],
   ["cupos", "Cupos de importado"], ["plan", "Plan 2027"],
 ];
 
 export default function App() {
   const [tab, setTab] = useState("diag");
   const [year, setYear] = useState("2026");
+  const [modo, setModo] = useState("aj");   // "crudo" | "aj"
   const [abiertaHit, setAbiertaHit] = useState(null);
   const [abiertaPit, setAbiertaPit] = useState(null);
 
   const jug = DATA.jugadores[year];
-  const aud = DATA.auditoria[year];
+  const aud = (modo === "aj" ? DATA.auditoriaAj : DATA.auditoria)[year];
   const eqs = DATA.equipos[year];
 
   const ir = (destino, pos) => {
@@ -1408,6 +1646,17 @@ export default function App() {
                 Diagnóstico de roster y plan de offseason · Liga Mexicana de Béisbol
               </p>
             </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div title="Descuenta el efecto del estadio de cada equipo" style={{ display: "flex", gap: 4, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 999, padding: 3 }}>
+              {[["aj", "Ajustado por parque"], ["crudo", "Sin ajustar"]].map(([k, l]) => (
+                <button key={k} className="tab" onClick={() => setModo(k)} style={{
+                  background: modo === k ? C.bien : "transparent",
+                  color: modo === k ? C.bg : C.ink3,
+                  border: "none", borderRadius: 999, padding: "6px 13px",
+                  cursor: "pointer", fontSize: 12, fontWeight: 700,
+                }}>{l}</button>
+              ))}
+            </div>
             <div style={{ display: "flex", gap: 4, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 999, padding: 3 }}>
               {DATA.years.map((y) => (
                 <button key={y} className="tab" onClick={() => setYear(String(y))} style={{
@@ -1417,6 +1666,7 @@ export default function App() {
                   cursor: "pointer", fontSize: 12.5, fontWeight: 700,
                 }}>{y}</button>
               ))}
+            </div>
             </div>
           </header>
 
@@ -1435,11 +1685,12 @@ export default function App() {
       </div>
 
       <div className="wrap" style={{ paddingTop: 22 }}>
-        {tab === "diag" && <Diagnostico ir={ir} year={year} jug={jug} aud={aud} eqs={eqs} />}
-        {tab === "hit" && <VistaGrupo kind="hit" jug={jug} abierta={abiertaHit} setAbierta={setAbiertaHit} />}
-        {tab === "pitch" && <VistaGrupo kind="pitch" jug={jug} abierta={abiertaPit} setAbierta={setAbiertaPit} />}
-        {tab === "cupos" && <Cupos jug={jug} aud={aud} />}
-        {tab === "plan" && <Plan />}
+        {tab === "diag" && <Diagnostico ir={ir} year={year} jug={jug} aud={aud} eqs={eqs} modo={modo} />}
+        {tab === "parque" && <ElParque eqs={eqs} ir={ir} />}
+        {tab === "hit" && <VistaGrupo kind="hit" jug={jug} abierta={abiertaHit} setAbierta={setAbiertaHit} modo={modo} />}
+        {tab === "pitch" && <VistaGrupo kind="pitch" jug={jug} abierta={abiertaPit} setAbierta={setAbiertaPit} modo={modo} />}
+        {tab === "cupos" && <Cupos jug={jug} aud={aud} modo={modo} />}
+        {tab === "plan" && <Plan modo={modo} />}
         <Metodologia />
       </div>
     </div>
