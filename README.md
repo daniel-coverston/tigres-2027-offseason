@@ -3,9 +3,10 @@
 Tablero interactivo que compara a los jugadores de **Tigres de Quintana Roo** contra los 20
 equipos de la Liga Mexicana de Béisbol, posición por posición, sobre las temporadas 2024–2026.
 
-**El hallazgo en dos números:** en 2026 Tigres terminó **5.º de 20 en efectividad** y
-**19.º de 20 en OPS**. No fue el mal cierre de temporada: la ofensiva lleva tres años en el
-fondo de la liga mientras el pitcheo sube año con año.
+**El hallazgo:** la ofensiva de Tigres es **la peor de la liga** —20.ª de 20 en wOBA, con un
+OPS+ de 73— por tercer año seguido. Y el pitcheo, que la tabla coloca 6.º por efectividad, es
+**12.º por FIP** y **19.º en ponches menos boletos**. El equipo no tiene una mitad sana y otra
+rota: tiene una mitad rota y otra que se ve mejor de lo que es.
 
 ![Vista de diagnóstico](docs/diagnostico.png)
 
@@ -15,7 +16,7 @@ fondo de la liga mientras el pitcheo sube año con año.
 
 | Pestaña | Qué responde |
 |---|---|
-| **Diagnóstico** | Dónde está parado el equipo: los 20 clubes en un cuadrante de bateo contra pitcheo, la trayectoria de tres años y el percentil del mejor Tigre en cada una de las nueve posiciones |
+| **Diagnóstico** | Dónde está parado el equipo: los 20 clubes en un cuadrante de wOBA contra FIP, la trayectoria de tres años, el percentil del mejor Tigre en cada posición y el panel del espejismo de la efectividad |
 | **Bateo / Pitcheo** | Cada jugador calificado de Tigres contra los de su misma posición en toda la liga: percentiles por métrica, ranking reordenable, cuadrante de dispersión y tabla completa |
 | **Cupos de importado** | Cuánto rindió cada extranjero por encima del jugador mexicano mediano de su posición, y cómo se compara ese retorno con el de los otros 19 equipos |
 | **Plan 2027** | Posiciones ordenadas por urgencia y el perfil de producción que hay que igualar en cada una |
@@ -23,18 +24,39 @@ fondo de la liga mientras el pitcheo sube año con año.
 El selector del encabezado recalcula todo el tablero para 2024, 2025 o 2026. La pestaña
 Plan 2027 siempre describe la temporada base 2026.
 
+### Por qué no se usan OPS ni efectividad
+
+La primera versión de este proyecto medía el bateo con OPS y el pitcheo con efectividad, que es
+lo que muestra la tabla de la liga. Al rehacerlo con métricas que descuentan el ruido, **una de
+las dos conclusiones se dio la vuelta**.
+
+- **La efectividad no mide al lanzador.** Un pitcher no controla lo que pasa cuando la pelota se
+  pone en juego: eso depende de la defensa, del parque y del orden en que caen los hits. **FIP**
+  reconstruye la efectividad usando solo ponches, boletos más golpeados y cuadrangulares, en la
+  misma escala. **K-BB%** —ponches menos boletos sobre bateadores enfrentados— es la medida más
+  estable de la habilidad de un lanzador.
+- **OPS suma OBP y SLG como si valieran lo mismo**, y un punto de OBP produce alrededor de 1.8
+  veces más carreras que uno de SLG. **wOBA** pesa cada evento por las carreras que realmente
+  produce. **OPS+** normaliza contra la liga de ese año, necesario porque el OPS de la LMB pasó
+  de .861 en 2025 a .807 en 2026.
+
+Medido por efectividad, el pitcheo de Tigres sube del lugar 13 al 6 en tres temporadas. Medido
+por FIP no se mueve: 13.º, 11.º, 12.º. La ofensiva, con cualquiera de las dos medidas, es la peor
+de la liga.
+
 ### La métrica propia: ventaja sobre el nacional mediano
 
 La LMB pasó de 20 extranjeros por equipo en 2024–2025 a **18 en 2026–2027**, con la meta
 declarada de llegar a **16 en 2028–2029**. El cupo de importado es un activo escaso que se
 encoge, y solo se justifica si compra producción que el mercado mexicano no da.
 
-Para cada importado se calcula su OPS (o su ERA) **menos la mediana de los jugadores mexicanos
+Para cada importado se calcula su wOBA (o su FIP) **menos la mediana de los jugadores mexicanos
 calificados en su misma posición ese año**, ponderado por turnos al bate o entradas lanzadas.
 Si el resultado es negativo, un nacional habría rendido más y el cupo salió sobrando.
 
 Tigres quedó **18.º de 20** en el retorno de sus cupos de bateo. No por usar demasiados —usó
-el 76% de sus turnos en importados, lugar 13 de la liga— sino por a quién se los dio.
+el 76% de sus turnos en importados, por debajo del promedio de la liga— sino por a quién se los
+dio. En el pitcheo el balance es distinto: los cupos quedaron 12.º de 20 medidos por FIP.
 
 ![Auditoría de cupos de importado](docs/cupos-de-importado.png)
 
@@ -76,6 +98,7 @@ python datos/analisis.py               # reescribe src/data.json
 | `datos/descargar_datos_lmb.py` | Pagina el servicio de estadísticas de lmb.com.mx y guarda un CSV por categoría y temporada en `datos_lmb/` |
 | `datos/nacionalidades.py` | Los `player_id` de la LMB son los mismos IDs de persona de MLB, así que la API pública de MLB devuelve país de nacimiento y fecha de nacimiento por lote |
 | `datos/prep.py` | Normalización: nombres de equipo, entradas en notación beisbolera, roles de abridor y relevista, agrupación de jardineros |
+| `datos/metricas.py` | wOBA, OPS+, FIP y K-BB%, con el porqué de cada elección documentado en el propio archivo |
 | `datos/analisis.py` | Percentiles, tiers, auditoría de cupos y agregados por equipo → `src/data.json` |
 
 Los scripts se corren en la máquina del usuario: el servicio de estadísticas está bloqueado en
@@ -97,7 +120,10 @@ impide consultarlo desde herramientas que la respetan.
   nominal del roster público, que no siempre coincide. Los jardines se agrupan porque la fuente
   a veces etiqueta genérico.
 - **Percentil:** lugar del jugador dentro de los calificados de su misma posición en toda la liga.
-  Más alto siempre es mejor; en ERA, WHIP, BB/9 y HR permitidos la escala se invierte.
+  Más alto siempre es mejor; en FIP, ERA, WHIP y HR permitidos la escala se invierte.
+- **Agregados de equipo:** suman a *todos* los jugadores que la liga lista con ese equipo, no solo
+  a los calificados. Contar solo calificados deja fuera las entradas malas de los lanzadores de
+  paso y hace ver mejor a los equipos con más rotación.
 - **Clasificación:** cada jugador se clasifica individualmente por su lugar dentro de su posición.
   Nunca se etiqueta una posición entera con el resultado de su mejor jugador: si hay tres
   jardineros y solo uno rinde, los otros dos aparecen con su propia tarjeta.

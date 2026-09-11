@@ -51,17 +51,17 @@ const POS_CORTO = {
 
 const METRICS = {
   hit: [
-    { key: "ops", label: "OPS", dec: 3, dir: 1, largo: "OPS (embasarse + poder)" },
-    { key: "avg", label: "AVG", dec: 3, dir: 1, largo: "Promedio de bateo" },
+    { key: "woba", label: "wOBA", dec: 3, dir: 1, largo: "wOBA — cada evento ofensivo pesado por las carreras que realmente produce" },
+    { key: "ops", label: "OPS", dec: 3, dir: 1, largo: "OPS — embasarse más poder, sumados sin ponderar" },
     { key: "obp", label: "OBP", dec: 3, dir: 1, largo: "Porcentaje de embasarse" },
     { key: "slg", label: "SLG", dec: 3, dir: 1, largo: "Slugging (poder)" },
     { key: "hr", label: "HR", dec: 0, dir: 1, largo: "Cuadrangulares" },
   ],
   pitch: [
-    { key: "era", label: "ERA", dec: 2, dir: -1, largo: "Efectividad" },
+    { key: "fip", label: "FIP", dec: 2, dir: -1, largo: "FIP — la efectividad que corresponde a lo que el lanzador sí controla: ponches, boletos y cuadrangulares" },
+    { key: "kbb", label: "K-BB%", dec: 1, dir: 1, largo: "Ponches menos boletos, como porcentaje de bateadores enfrentados. La medida más estable de habilidad" },
+    { key: "era", label: "ERA", dec: 2, dir: -1, largo: "Efectividad — incluye defensa, parque y secuencia" },
     { key: "whip", label: "WHIP", dec: 2, dir: -1, largo: "Corredores por entrada" },
-    { key: "k9", label: "K/9", dec: 1, dir: 1, largo: "Ponches por 9 entradas" },
-    { key: "bb9", label: "BB/9", dec: 1, dir: -1, largo: "Bases por bola por 9" },
     { key: "hr", label: "HR", dec: 0, dir: -1, largo: "Cuadrangulares permitidos" },
   ],
 };
@@ -252,8 +252,8 @@ function PercentileBar({ label, largo, raw, pct }) {
 
 function PlayerCard({ p, onClick }) {
   const kind = p.kind;
-  const main = kind === "hit" ? "ops" : "era";
-  const mainPct = kind === "hit" ? p.p_ops : p.p_era;
+  const main = kind === "hit" ? "woba" : "fip";
+  const mainPct = kind === "hit" ? p.p_woba : p.p_fip;
   const m = METRICS[kind][0];
   const t = TIERS[tierOf(p.rank, p.total)];
   return (
@@ -305,37 +305,35 @@ const Tip = ({ children }) => <div style={box}>{children}</div>;
 /* ============================================================ diagnostico */
 function CuadranteEquipos({ eqs }) {
   const mid = {
-    ops: eqs.reduce((a, e) => a + e.ops, 0) / eqs.length,
-    era: eqs.reduce((a, e) => a + e.era, 0) / eqs.length,
+    woba: eqs.reduce((a, e) => a + e.woba, 0) / eqs.length,
+    fip: eqs.reduce((a, e) => a + e.fip, 0) / eqs.length,
   };
-  const minO = Math.min(...eqs.map((e) => e.ops)), maxO = Math.max(...eqs.map((e) => e.ops));
-  const minE = Math.min(...eqs.map((e) => e.era)), maxE = Math.max(...eqs.map((e) => e.era));
+  const minO = Math.min(...eqs.map((e) => e.woba)), maxO = Math.max(...eqs.map((e) => e.woba));
+  const minE = Math.min(...eqs.map((e) => e.fip)), maxE = Math.max(...eqs.map((e) => e.fip));
   // Cuantos equipos comparten el cuadrante y que tan lejos queda Tigres del siguiente.
-  const cuad = eqs.filter((e) => e.era < mid.era && e.ops < mid.ops).sort((a, b) => a.ops - b.ops);
   const yo = eqs.find((e) => e.equipo === "Tigres");
-  const sig = cuad.find((e) => e.equipo !== "Tigres");
-  const ptsAbajo = sig && yo ? Math.round((sig.ops - yo.ops) * 1000) : null;
+  const peorQueYo = eqs.filter((e) => e.woba < yo.woba).length;
   return (
     <Panel
       title="Los 20 equipos en un solo cuadro"
-      sub={`OPS en el eje horizontal, efectividad en el vertical (invertida: arriba es mejor pitcheo). Siete equipos combinan pitcheo por encima del promedio con ofensiva por debajo — el cuadrante sombreado. Tigres es el caso extremo del grupo: batea ${ptsAbajo} puntos de OPS menos que el siguiente de esa lista.`}
+      sub={`wOBA del equipo en el eje horizontal, FIP en el vertical (invertido: arriba es mejor pitcheo). Ambas medidas descuentan el ruido: wOBA pesa cada evento por las carreras que produce y FIP se queda solo con lo que el lanzador controla. Tigres queda abajo a la izquierda: ${peorQueYo === 0 ? "nadie en la liga batea peor" : `solo ${peorQueYo} equipo${peorQueYo > 1 ? "s batean" : " batea"} peor`}, y el pitcheo tampoco alcanza el promedio.`}
     >
       <ResponsiveContainer width="100%" height={430}>
         <ScatterChart margin={{ top: 14, right: 26, left: 2, bottom: 26 }}>
           <CartesianGrid stroke={C.line} strokeDasharray="2 4" />
-          <ReferenceArea x1={minO - .01} x2={mid.ops} y1={minE - .1} y2={mid.era}
-            fill={C.tigres} fillOpacity={.05} stroke="none" />
-          <XAxis type="number" dataKey="ops" domain={[minO - .012, maxO + .012]}
+          <ReferenceArea x1={minO - .01} x2={mid.woba} y1={minE - .1} y2={mid.fip}
+            fill={C.mal} fillOpacity={.05} stroke="none" />
+          <XAxis type="number" dataKey="woba" domain={[minO - .006, maxO + .006]}
             tick={{ fill: C.ink3, fontSize: 11 }} axisLine={{ stroke: C.line }} tickLine={false}
             tickFormatter={(v) => fmt(v, 3)}
-            label={{ value: "OPS del equipo  →  más ofensiva", position: "insideBottom", offset: -14, fill: C.ink3, fontSize: 11.5 }} />
-          <YAxis type="number" dataKey="era" reversed domain={[minE - .15, maxE + .15]}
+            label={{ value: "wOBA del equipo  →  más ofensiva", position: "insideBottom", offset: -14, fill: C.ink3, fontSize: 11.5 }} />
+          <YAxis type="number" dataKey="fip" reversed domain={[minE - .15, maxE + .15]}
             tickCount={6} tickFormatter={(v) => Number(v).toFixed(2)} allowDecimals
             tick={{ fill: C.ink3, fontSize: 11 }} axisLine={false} tickLine={false}
-            label={{ value: "↑ mejor pitcheo   (ERA)", angle: -90, position: "insideLeft", offset: 16, fill: C.ink3, fontSize: 11.5 }} />
+            label={{ value: "↑ mejor pitcheo   (FIP)", angle: -90, position: "insideLeft", offset: 16, fill: C.ink3, fontSize: 11.5 }} />
           <ZAxis range={[110, 110]} />
-          <ReferenceLine x={mid.ops} stroke={C.line2} strokeDasharray="4 4" />
-          <ReferenceLine y={mid.era} stroke={C.line2} strokeDasharray="4 4" />
+          <ReferenceLine x={mid.woba} stroke={C.line2} strokeDasharray="4 4" />
+          <ReferenceLine y={mid.fip} stroke={C.line2} strokeDasharray="4 4" />
           <Tooltip cursor={{ strokeDasharray: "3 3", stroke: C.ink3 }}
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
@@ -343,9 +341,11 @@ function CuadranteEquipos({ eqs }) {
               return (
                 <Tip>
                   <div className="disp" style={{ fontSize: 16, fontWeight: 600 }}>{d.equipo}</div>
-                  <div className="num">OPS {fmt(d.ops, 3)} · {ord(d.rank_ops)} de 20</div>
-                  <div className="num">ERA {fmt(d.era, 2)} · {ord(d.rank_era)} de 20</div>
-                  <div className="num" style={{ color: C.ink3 }}>Récord {d.g}-{d.pp}</div>
+                  <div className="num">wOBA {fmt(d.woba, 3)} · {ord(d.rank_woba)} de 20</div>
+                  <div className="num">FIP {fmt(d.fip, 2)} · {ord(d.rank_fip)} de 20</div>
+                  <div className="num" style={{ color: C.ink3 }}>
+                    ERA {fmt(d.era, 2)} ({ord(d.rank_era)}) · K-BB% {fmt(d.kbb, 1)} ({ord(d.rank_kbb)})
+                  </div>
                 </Tip>
               );
             }} />
@@ -361,10 +361,10 @@ function CuadranteEquipos({ eqs }) {
         </ScatterChart>
       </ResponsiveContainer>
       <p style={{ fontSize: 12, color: C.ink3, marginTop: 4, marginBottom: 0 }}>
-        Las líneas punteadas marcan el promedio de la liga en cada eje. La zona sombreada es el
-        cuadrante donde el pitcheo alcanza para competir y la ofensiva no. Cada punto resume a los
-        jugadores <i>calificados</i> que la liga lista con ese equipo, ponderados por turnos al bate
-        y entradas lanzadas; un jugador cambiado a media temporada cuenta con su último equipo.
+        Las líneas punteadas marcan el promedio de la liga en cada eje; la zona sombreada es el
+        cuadrante de abajo a la izquierda, donde ninguna de las dos mitades alcanza. Cada punto suma
+        a <i>todos</i> los jugadores que la liga lista con ese equipo, no solo a los calificados;
+        un jugador cambiado a media temporada cuenta con su último equipo.
       </p>
     </Panel>
   );
@@ -376,7 +376,7 @@ function MapaPosiciones({ jug, ir }) {
     const mios = grupo.filter((d) => d.esTigre);
     const kind = HIT_POS.includes(pos) ? "hit" : "pitch";
     const mejor = mios.length ? mios.reduce((a, b) => (a.rank < b.rank ? a : b)) : null;
-    const p = mejor ? (kind === "hit" ? mejor.p_ops : mejor.p_era) : null;
+    const p = mejor ? (kind === "hit" ? mejor.p_woba : mejor.p_fip) : null;
     return { pos, kind, mejor, pct: p, n: mios.length, total: grupo.length };
   });
   return (
@@ -405,86 +405,188 @@ function MapaPosiciones({ jug, ir }) {
   );
 }
 
+/* El hallazgo central del rediseño de métricas: la efectividad de varios equipos
+   —Tigres entre los primeros— describe un pitcheo mejor del que sus lanzadores
+   produjeron. Este panel existe para que ese hueco se vea. */
+function Espejismo({ eqs, jug }) {
+  const filas = [...eqs].sort((a, b) => a.eraFip - b.eraFip);
+  const yo = eqs.find((e) => e.equipo === "Tigres");
+  const brechas = jug
+    .filter((d) => d.esTigre && d.kind === "pitch" && d.p_era !== null && d.p_fip !== null)
+    .map((d) => ({ ...d, delta: d.p_era - d.p_fip }))
+    .sort((a, b) => b.delta - a.delta)
+    .slice(0, 6);
+
+  return (
+    <>
+      <Panel
+        title="El espejismo de la efectividad"
+        sub="Efectividad menos FIP, por equipo. Un número negativo significa que el equipo permitió menos carreras de las que sus lanzadores, por sí solos, se ganaron: la diferencia la puso la defensa, el parque o el orden en que cayeron los hits. Nada de eso se repite solo al año siguiente."
+      >
+        <ResponsiveContainer width="100%" height={430}>
+          <BarChart data={filas} layout="vertical" margin={{ top: 4, right: 34, left: 92, bottom: 16 }}>
+            <CartesianGrid stroke={C.line} strokeDasharray="2 4" horizontal={false} />
+            <XAxis type="number" tick={{ fill: C.ink3, fontSize: 11 }} axisLine={{ stroke: C.line }}
+              tickLine={false} tickFormatter={(v) => (v > 0 ? "+" : "") + Number(v).toFixed(2)}
+              label={{ value: "← la efectividad halaga        la efectividad castiga →", position: "insideBottom", offset: -8, fill: C.ink3, fontSize: 11 }} />
+            <YAxis type="category" dataKey="equipo" width={88} interval={0}
+              tick={{ fill: C.ink2, fontSize: 11 }} axisLine={false} tickLine={false} />
+            <Tooltip cursor={{ fill: "rgba(255,255,255,.045)" }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const d = payload[0].payload;
+                return (
+                  <Tip>
+                    <div className="disp" style={{ fontSize: 16, fontWeight: 600 }}>{d.equipo}</div>
+                    <div className="num">ERA {fmt(d.era, 2)} ({ord(d.rank_era)}) · FIP {fmt(d.fip, 2)} ({ord(d.rank_fip)})</div>
+                    <div className="num" style={{ color: d.eraFip < 0 ? C.mal : C.bien }}>
+                      Diferencia {d.eraFip > 0 ? "+" : ""}{fmt(d.eraFip, 2)} carreras
+                    </div>
+                  </Tip>
+                );
+              }} />
+            <ReferenceLine x={0} stroke={C.ink3} />
+            <Bar dataKey="eraFip" barSize={14} isAnimationActive={false}>
+              {filas.map((d) => (
+                <Cell key={d.equipo} fill={d.equipo === "Tigres" ? C.tigres : C.neutro}
+                  stroke={C.bg} strokeWidth={2} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        <p style={{ fontSize: 13, color: C.ink2, lineHeight: 1.75, marginTop: 10, marginBottom: 0, maxWidth: 840 }}>
+          Tigres cerró la temporada con una efectividad de <b>{fmt(yo.era, 2)}</b>, {ord(yo.rank_era)} de la
+          liga, sobre un FIP de <b>{fmt(yo.fip, 2)}</b>, que es apenas {ord(yo.rank_fip)}. Son{" "}
+          <b>{fmt(Math.abs(yo.eraFip), 2)} carreras por cada nueve entradas</b> que no salieron del montículo.
+          Y el K-BB% —ponches menos boletos, la medida más estable que existe de la habilidad de un
+          lanzador— deja al equipo {ord(yo.rank_kbb)} de 20.
+        </p>
+      </Panel>
+
+      <Panel
+        title="Quién se ve distinto según cómo se le mida"
+        sub="Los seis lanzadores de Tigres con mayor distancia entre su percentil por efectividad y su percentil por FIP. A la izquierda, lo que dice la ERA; a la derecha, lo que sostiene su propio trabajo."
+      >
+        <div className="cards">
+          {brechas.map((d) => (
+            <div key={d.pid} className="card" style={{
+              flex: "0 0 246px", width: 246, background: C.panel2,
+              border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.mal}`,
+              borderRadius: 12, padding: 13,
+            }}>
+              <div className="disp" style={{ fontSize: 17, fontWeight: 600 }}>{d.nombre}</div>
+              <div style={{ fontSize: 11.5, color: C.ink3, marginTop: 2 }}>
+                {POS_LABEL[d.pos]} · {pais(d.pais)}{d.edad ? ` · ${d.edad} años` : ""}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+                <div style={{ textAlign: "center" }}>
+                  <div className="disp num" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1, color: pctColor(d.p_era) }}>{d.p_era}</div>
+                  <div style={{ fontSize: 9.5, color: C.ink3, marginTop: 3 }}>ERA {fmt(d.era, 2)}</div>
+                </div>
+                <div style={{ color: C.ink3, fontSize: 16 }}>→</div>
+                <div style={{ textAlign: "center" }}>
+                  <div className="disp num" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1, color: pctColor(d.p_fip) }}>{d.p_fip}</div>
+                  <div style={{ fontSize: 9.5, color: C.ink3, marginTop: 3 }}>FIP {fmt(d.fip, 2)}</div>
+                </div>
+                <div style={{ marginLeft: "auto", textAlign: "right" }}>
+                  <div className="num" style={{ fontSize: 15, fontWeight: 700, color: C.mal }}>−{d.delta}</div>
+                  <div style={{ fontSize: 9.5, color: C.ink3 }}>percentiles</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 10, fontSize: 11.5, color: C.ink3 }}>
+                K-BB% {fmt(d.kbb, 1)} · percentil {d.p_kbb}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Panel>
+    </>
+  );
+}
+
 function Diagnostico({ ir, year, jug, aud, eqs }) {
   const t = DATA.tendencia;
   const yo = eqs.find((e) => e.equipo === "Tigres");
-  const rankData = t.map((d) => ({ year: d.year, Bateo: 21 - d.opsRank, Pitcheo: 21 - d.eraRank, opsRank: d.opsRank, eraRank: d.eraRank }));
+  const rankData = t.map((d) => ({
+    year: d.year,
+    Bateo: 21 - d.wobaRank,
+    "Pitcheo (FIP)": 21 - d.fipRank,
+    "Pitcheo (efectividad)": 21 - d.eraRank,
+    wobaRank: d.wobaRank, fipRank: d.fipRank, eraRank: d.eraRank,
+  }));
   const miHit = aud.find((a) => a.kind === "hit" && a.equipo === "Tigres");
-  const miPit = aud.find((a) => a.kind === "pitch" && a.equipo === "Tigres");
-  const esActual = String(year) === "2026";
   const bats = jug.filter((d) => d.esTigre && d.kind === "hit");
   const totalBat = bats.length;
-  const sobreMedia = bats.filter((d) => (d.p_ops ?? 0) > 50).length;
+  const sobreMedia = bats.filter((d) => (d.p_woba ?? 0) > 50).length;
 
   return (
     <div>
       <Panel style={{ background: `linear-gradient(150deg,${C.panel},${C.panel2})`, borderLeft: `3px solid ${C.tigres}` }}>
         <h2 className="disp" style={{ margin: "0 0 12px", fontSize: 30, fontWeight: 600, lineHeight: 1.2 }}>
-          El pitcheo de Tigres no es el problema.
+          La ofensiva es la peor de la liga. El pitcheo no es la fortaleza que parece.
         </h2>
-        <p style={{ margin: 0, fontSize: 15, color: C.ink2, lineHeight: 1.75, maxWidth: 800 }}>
-          En {year} Tigres terminó <b style={{ color: C.bien }}>{ord(yo.rank_era)} de 20 en efectividad</b> y
-          {" "}<b style={{ color: C.mal }}>{ord(yo.rank_ops)} de 20 en OPS</b>.
-          {esActual && <> No es el efecto de un mal cierre: la ofensiva lleva tres años seguidos en el
-          fondo de la liga mientras el pitcheo sube año con año. Es una diferencia estructural,
-          no una racha.</>}
+        <p style={{ margin: 0, fontSize: 15, color: C.ink2, lineHeight: 1.75, maxWidth: 820 }}>
+          En {year} Tigres terminó <b style={{ color: C.mal }}>{ord(yo.rank_woba)} de 20 en wOBA</b>, con una
+          ofensiva <b>{100 - yo.opsPlus}% por debajo del promedio de la liga</b>. El pitcheo cerró con una
+          efectividad de {fmt(yo.era, 2)} —{ord(yo.rank_era)} lugar— pero su FIP, que solo cuenta lo que los
+          lanzadores controlan, es {fmt(yo.fip, 2)}: <b style={{ color: C.mal }}>{ord(yo.rank_fip)} de 20</b>.
+          El equipo no tiene una mitad sana y otra rota. Tiene una mitad rota y otra que se ve mejor de lo que es.
         </p>
       </Panel>
 
       <div className="kpis" style={{ marginBottom: 18 }}>
-        <StatTile label="Bateadores sobre la media" value={`${sobreMedia}`} unit={`de ${totalBat}`} big
+        <StatTile label="Ofensiva contra la liga" value={yo.opsPlus} unit="OPS+" big
+          tone={yo.opsPlus < 95 ? C.mal : C.ink}
+          foot={`100 es el promedio de la liga · ${ord(yo.rank_woba)} de 20 en wOBA`} />
+        <StatTile label="Bateadores sobre la media" value={`${sobreMedia}`} unit={`de ${totalBat}`}
           tone={sobreMedia / Math.max(totalBat, 1) < .4 ? C.mal : C.ink}
           foot="Calificados que superan el percentil 50 de su posición" />
-        <StatTile label="OPS de los calificados" value={fmt(yo.ops, 3)} tone={C.mal}
-          foot={`${ord(yo.rank_ops)} de 20 en la liga`} />
-        <StatTile label="Efectividad de los calificados" value={fmt(yo.era, 2)} tone={C.bien}
-          foot={`${ord(yo.rank_era)} de 20 en la liga`} />
         <StatTile label="Cuadrangulares" value={yo.hr} tone={yo.rank_hr > 14 ? C.mal : C.ink}
           foot={`${ord(yo.rank_hr)} de 20 en la liga`} />
+        <StatTile label="Pitcheo · FIP" value={fmt(yo.fip, 2)} tone={yo.rank_fip > 12 ? C.mal : C.neutro2}
+          foot={`${ord(yo.rank_fip)} de 20 · la efectividad de ${fmt(yo.era, 2)} dice ${ord(yo.rank_era)}`} />
+        <StatTile label="Ponches menos boletos" value={fmt(yo.kbb, 1)} unit="%" tone={yo.rank_kbb > 12 ? C.mal : C.bien}
+          foot={`${ord(yo.rank_kbb)} de 20 · la habilidad más estable del lanzador`} />
         <StatTile label="Cupos importados · bateo" value={ord(miHit.rank)} unit="de 20" tone={gsnColor(miHit.gsn)}
-          foot={`${miHit.gsn > 0 ? "+" : ""}${fmt(miHit.gsn, 3)} de OPS sobre el mexicano mediano`} />
-        <StatTile label="Cupos importados · pitcheo" value={ord(miPit.rank)} unit="de 20" tone={gsnColor(miPit.gsn)}
-          foot={`${miPit.gsn > 0 ? "+" : ""}${fmt(miPit.gsn, 2)} de efectividad sobre el mexicano mediano`} />
+          foot={`${miHit.gsn > 0 ? "+" : ""}${fmt(miHit.gsn, 3)} de wOBA sobre el mexicano mediano`} />
       </div>
 
       <CuadranteEquipos eqs={eqs} />
 
       <Panel
-        title="Tres años, dos direcciones opuestas"
-        sub="Lugar de Tigres entre los 20 equipos. Más alto es mejor. Son dos medidas de escala distinta, así que van en dos paneles: nunca en un mismo eje."
+        title="Tres años: una mitad hundida y otra que solo parecía subir"
+        sub="Lugar de Tigres entre los 20 equipos. Más alto es mejor. La línea gruesa del pitcheo es el FIP; la delgada es la efectividad. La distancia entre las dos es lo que la defensa, el parque y la suerte pusieron."
       >
-        <div className="two">
-          {[["Bateo", "opsRank", C.mal], ["Pitcheo", "eraRank", C.bien]].map(([label, rk, col]) => (
-            <div key={label}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: C.ink, marginBottom: 6 }}>
-                {label} <span style={{ color: C.ink3, fontWeight: 400 }}>— lugar en la liga</span>
-              </div>
-              <ResponsiveContainer width="100%" height={215}>
-                <LineChart data={rankData} margin={{ top: 8, right: 18, left: -18, bottom: 4 }}>
-                  <CartesianGrid stroke={C.line} strokeDasharray="2 4" vertical={false} />
-                  <XAxis dataKey="year" tick={{ fill: C.ink3, fontSize: 11 }} axisLine={{ stroke: C.line }} tickLine={false} />
-                  <YAxis domain={[0, 20]} ticks={[1, 5, 10, 15, 20]} tickFormatter={(v) => ord(21 - v)}
-                    tick={{ fill: C.ink3, fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={box} labelStyle={{ color: C.ink2 }}
-                    formatter={(v, n, o) => [`lugar ${o.payload[rk]} de 20`, label]} />
-                  <ReferenceLine y={10.5} stroke={C.ink3} strokeDasharray="4 4"
-                    label={{ value: "media de la liga", fill: C.ink3, fontSize: 10, position: "insideBottomRight" }} />
-                  <Line type="monotone" dataKey={label} stroke={col} strokeWidth={2.5} isAnimationActive={false}
-                    dot={{ r: 5, fill: col, stroke: C.bg, strokeWidth: 2 }}
-                    activeDot={{ r: 7, stroke: C.bg, strokeWidth: 2 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          ))}
-        </div>
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={rankData} margin={{ top: 10, right: 22, left: -12, bottom: 4 }}>
+            <CartesianGrid stroke={C.line} strokeDasharray="2 4" vertical={false} />
+            <XAxis dataKey="year" tick={{ fill: C.ink3, fontSize: 12 }} axisLine={{ stroke: C.line }} tickLine={false} />
+            <YAxis domain={[0, 20]} ticks={[1, 5, 10, 15, 20]} tickFormatter={(v) => ord(21 - v)}
+              tick={{ fill: C.ink3, fontSize: 11 }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={box} labelStyle={{ color: C.ink2 }}
+              formatter={(v, n) => [ord(21 - v), n]} />
+            <ReferenceLine y={10.5} stroke={C.ink3} strokeDasharray="4 4"
+              label={{ value: "media de la liga", fill: C.ink3, fontSize: 10, position: "insideBottomRight" }} />
+            <Line type="monotone" dataKey="Pitcheo (efectividad)" stroke={C.neutro2} strokeWidth={1.5}
+              strokeDasharray="5 4" isAnimationActive={false} dot={{ r: 3.5, fill: C.neutro2 }} />
+            <Line type="monotone" dataKey="Pitcheo (FIP)" stroke={C.bien} strokeWidth={2.6} isAnimationActive={false}
+              dot={{ r: 5, fill: C.bien, stroke: C.bg, strokeWidth: 2 }} />
+            <Line type="monotone" dataKey="Bateo" stroke={C.mal} strokeWidth={2.6} isAnimationActive={false}
+              dot={{ r: 5, fill: C.mal, stroke: C.bg, strokeWidth: 2 }} />
+          </LineChart>
+        </ResponsiveContainer>
+        <Leyenda items={[[C.mal, "Bateo (wOBA)", true], [C.bien, "Pitcheo (FIP)", true],
+        [C.neutro2, "Pitcheo (efectividad)", true]]} />
         <p style={{ fontSize: 13, color: C.ink2, lineHeight: 1.75, marginTop: 12, marginBottom: 0, maxWidth: 840 }}>
-          El pitcheo subió del lugar 13 al 5 en tres temporadas. El bateo estuvo 20.º, 16.º y 19.º.
-          Cualquier plan que reparta el presupuesto por igual entre las dos mitades del equipo está
-          ignorando lo que estos dos paneles llevan tres años diciendo.
+          Medido por efectividad, el pitcheo sube del lugar 13 al 6 en tres temporadas y parece un
+          proyecto que va bien. Medido por FIP no se mueve: 13.º, 11.º, 12.º. Lo que mejoró no fue el
+          pitcheo. El bateo, mientras tanto, fue 20.º, 19.º y 20.º.
         </p>
       </Panel>
 
       <MapaPosiciones jug={jug} ir={ir} />
+
+      <Espejismo eqs={eqs} jug={jug} />
 
       <Panel title="A dónde ir desde aquí">
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -499,6 +601,7 @@ function Diagnostico({ ir, year, jug, aud, eqs }) {
     </div>
   );
 }
+
 
 /* ====================================================== detalle posicion */
 function Tabla({ rows, kind, buscador = true }) {
@@ -701,19 +804,19 @@ function PositionDetail({ pos, kind, jug, onClose }) {
         title={kind === "hit" ? "Llegar a base vs. poder" : "Control vs. dominio"}
         sub={kind === "hit"
           ? "OBP en el eje horizontal, SLG en el vertical. Arriba a la derecha es el mejor cuadrante."
-          : "BB/9 en el eje horizontal (menos es mejor), K/9 en el vertical. Arriba a la izquierda es el mejor cuadrante."}
+          : "Porcentaje de boletos en el eje horizontal (menos es mejor), porcentaje de ponches en el vertical. Arriba a la izquierda es el mejor cuadrante: quien poncha mucho y regala poco."}
       >
         <ResponsiveContainer width="100%" height={340}>
           <ScatterChart margin={{ top: 10, right: 24, left: -2, bottom: 20 }}>
             <CartesianGrid stroke={C.line} strokeDasharray="2 4" />
-            <XAxis type="number" dataKey={kind === "hit" ? "obp" : "bb9"} domain={["dataMin", "dataMax"]}
+            <XAxis type="number" dataKey={kind === "hit" ? "obp" : "bbpct"} domain={["dataMin", "dataMax"]}
               tick={{ fill: C.ink3, fontSize: 11 }} axisLine={{ stroke: C.line }} tickLine={false}
               tickFormatter={(v) => (kind === "hit" ? fmt(v, 3) : fmt(v, 1))}
-              label={{ value: kind === "hit" ? "OBP" : "BB/9", position: "insideBottom", offset: -10, fill: C.ink3, fontSize: 11.5 }} />
-            <YAxis type="number" dataKey={kind === "hit" ? "slg" : "k9"} domain={["dataMin", "dataMax"]}
+              label={{ value: kind === "hit" ? "OBP" : "% de boletos", position: "insideBottom", offset: -10, fill: C.ink3, fontSize: 11.5 }} />
+            <YAxis type="number" dataKey={kind === "hit" ? "slg" : "kpct"} domain={["dataMin", "dataMax"]}
               tick={{ fill: C.ink3, fontSize: 11 }} axisLine={false} tickLine={false}
               tickFormatter={(v) => (kind === "hit" ? fmt(v, 3) : fmt(v, 1))}
-              label={{ value: kind === "hit" ? "SLG" : "K/9", angle: -90, position: "insideLeft", offset: 20, fill: C.ink3, fontSize: 11.5 }} />
+              label={{ value: kind === "hit" ? "SLG" : "% de ponches", angle: -90, position: "insideLeft", offset: 20, fill: C.ink3, fontSize: 11.5 }} />
             <ZAxis range={[75, 75]} />
             <Tooltip cursor={{ strokeDasharray: "3 3", stroke: C.ink3 }}
               content={({ active, payload }) => {
@@ -725,7 +828,7 @@ function PositionDetail({ pos, kind, jug, onClose }) {
                     <div style={{ color: C.ink3 }}>{d.equipo}</div>
                     <div className="num">{kind === "hit"
                       ? <>OBP {fmt(d.obp, 3)} · SLG {fmt(d.slg, 3)} · OPS <b>{fmt(d.ops, 3)}</b></>
-                      : <>BB/9 {fmt(d.bb9, 1)} · K/9 {fmt(d.k9, 1)} · ERA <b>{fmt(d.era, 2)}</b></>}
+                      : <>Boletos {fmt(d.bbpct, 1)}% · Ponches {fmt(d.kpct, 1)}% · FIP <b>{fmt(d.fip, 2)}</b></>}
                     </div>
                   </Tip>
                 );
@@ -843,7 +946,7 @@ function VistaGrupo({ kind, jug, abierta, setAbierta }) {
 /* ================================================================= cupos */
 function EdadRendimiento({ jug }) {
   const datos = jug.filter((d) => d.esTigre && d.edad).map((d) => ({
-    ...d, pct: d.kind === "hit" ? d.p_ops : d.p_era,
+    ...d, pct: d.kind === "hit" ? d.p_woba : d.p_fip,
     grupo: d.mexicano ? "mex" : "imp",
   })).filter((d) => d.pct !== null && d.pct !== undefined);
   const mex = datos.filter((d) => d.grupo === "mex");
@@ -880,7 +983,7 @@ function EdadRendimiento({ jug }) {
                   <div className="disp" style={{ fontSize: 16, fontWeight: 600 }}>{d.nombre}</div>
                   <div style={{ color: C.ink3 }}>{POS_LABEL[d.pos]} · {pais(d.pais)} · {d.edad} años</div>
                   <div className="num">Percentil <b style={{ color: pctColor(d.pct) }}>{d.pct}</b>{" "}
-                    · {d.kind === "hit" ? `OPS ${fmt(d.ops, 3)}` : `ERA ${fmt(d.era, 2)}`}</div>
+                    · {d.kind === "hit" ? `wOBA ${fmt(d.woba, 3)}` : `FIP ${fmt(d.fip, 2)}`}</div>
                 </Tip>
               );
             }} />
@@ -923,6 +1026,7 @@ function Cupos({ jug, aud }) {
   const imports = jug.filter((d) => d.esTigre && d.kind === kind && !d.mexicano).sort((a, b) => a.gsn - b.gsn);
   const nacionales = jug.filter((d) => d.esTigre && d.kind === kind && d.mexicano).sort((a, b) => a.rank / a.total - b.rank / b.total);
   const dec = kind === "hit" ? 3 : 2;
+  const metrica = kind === "hit" ? "woba" : "fip";
   const mio = filas.find((f) => f.equipo === "Tigres");
 
   return (
@@ -936,7 +1040,9 @@ function Cupos({ jug, aud }) {
           declarada de llegar a <b>16 en 2028–2029</b>. Un cupo solo se justifica si compra producción
           que el mercado mexicano no da. La medida de abajo es exactamente eso: cuánto rindió cada
           importado <b>por encima del jugador mexicano mediano de su misma posición</b>. Si el número
-          es negativo, un nacional habría rendido más y el cupo salió sobrando.
+          es negativo, un nacional habría rendido más y el cupo salió sobrando. La comparación se hace
+          con <b>wOBA</b> en bateo y con <b>FIP</b> en pitcheo, no con OPS ni con efectividad: son las
+          medidas que descuentan la defensa detrás del lanzador y el peso real de cada evento ofensivo.
         </p>
       </Panel>
 
@@ -953,8 +1059,8 @@ function Cupos({ jug, aud }) {
       <Panel
         title={`Retorno de los cupos de importado — ${kind === "hit" ? "bateo" : "pitcheo"}`}
         sub={kind === "hit"
-          ? "Puntos de OPS que los importados de cada equipo dieron por encima del bateador mexicano mediano de su posición, ponderado por turnos al bate."
-          : "Carreras limpias de ventaja que los importados de cada equipo dieron sobre el pitcher mexicano mediano de su rol, ponderado por entradas lanzadas."}
+          ? "Puntos de wOBA que los importados de cada equipo dieron por encima del bateador mexicano mediano de su posición, ponderado por turnos al bate."
+          : "Carreras de FIP de ventaja que los importados de cada equipo dieron sobre el lanzador mexicano mediano de su rol, ponderado por entradas lanzadas."}
       >
         <ResponsiveContainer width="100%" height={480}>
           <BarChart data={filas} layout="vertical" margin={{ top: 4, right: 34, left: 92, bottom: 4 }}>
@@ -1000,7 +1106,7 @@ function Cupos({ jug, aud }) {
           <table style={{ minWidth: 700 }}>
             <thead>
               <tr>
-                {["Pos", "Jugador", "Origen", "Edad", kind === "hit" ? "OPS" : "ERA", "Nacional mediano", "Ventaja", "Veredicto"].map((h, i) => (
+                {["Pos", "Jugador", "Origen", "Edad", kind === "hit" ? "wOBA" : "FIP", "Nacional mediano", "Ventaja", "Veredicto"].map((h, i) => (
                   <th key={h} style={{
                     textAlign: i < 3 ? "left" : "right", padding: "9px 10px", color: C.ink3,
                     fontSize: 10.5, fontWeight: 700, letterSpacing: .6, textTransform: "uppercase",
@@ -1011,7 +1117,7 @@ function Cupos({ jug, aud }) {
             </thead>
             <tbody>
               {imports.map((d) => {
-                const base = kind === "hit" ? d.ops - d.gsn : d.era + d.gsn;
+                const base = kind === "hit" ? d.woba - d.gsn : d.fip + d.gsn;
                 const ok = d.gsn > 0;
                 const cel = { padding: "9px 10px", fontSize: 12.5, borderBottom: `1px solid ${C.panel2}` };
                 return (
@@ -1020,7 +1126,7 @@ function Cupos({ jug, aud }) {
                     <td style={{ ...cel, fontSize: 13, fontWeight: 600 }}>{d.nombre}</td>
                     <td style={{ ...cel, color: C.ink2 }}>{pais(d.pais)}</td>
                     <td className="num" style={{ ...cel, textAlign: "right", color: d.edad >= 33 ? C.mal : C.ink }}>{d.edad ?? "—"}</td>
-                    <td className="num" style={{ ...cel, textAlign: "right" }}>{fmt(kind === "hit" ? d.ops : d.era, dec)}</td>
+                    <td className="num" style={{ ...cel, textAlign: "right" }}>{fmt(d[metrica], dec)}</td>
                     <td className="num" style={{ ...cel, textAlign: "right", color: C.ink3 }}>{fmt(base, dec)}</td>
                     <td className="num" style={{ ...cel, textAlign: "right", fontSize: 13, fontWeight: 800, color: gsnColor(d.gsn) }}>
                       {d.gsn > 0 ? "+" : ""}{fmt(d.gsn, dec)}
@@ -1073,11 +1179,11 @@ function Plan() {
           Las posiciones van ordenadas por el percentil del mejor jugador de Tigres en cada una:
           arriba, lo más urgente. Para cada hueco se muestran los seis jugadores que mejor rindieron
           ahí en la liga — no como una lista de fichajes, sino como el <b>perfil de producción</b> que
-          hay que igualar. La disponibilidad contractual la tiene el club.
+          hay que igualar. La disponibilidad contractual la tiene el club. El orden usa wOBA, no OPS.
         </p>
       </Panel>
 
-      <Panel title="Prioridades del lineup" sub="Percentil del mejor bateador de Tigres en cada posición, entre los calificados de toda la liga.">
+      <Panel title="Prioridades del lineup" sub="Percentil de wOBA del mejor bateador de Tigres en cada posición, entre los calificados de toda la liga.">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(178px,1fr))", gap: 10 }}>
           {huecos.map((h, i) => {
             const act = h.pos === pos;
@@ -1113,9 +1219,10 @@ function Plan() {
                   <td style={{ padding: "10px 10px", fontSize: 13.5, fontWeight: 700, color: C.tigres }}>{d.nombre}</td>
                   <td style={{ padding: "10px 10px", fontSize: 12.5, color: C.ink2 }}>{pais(d.pais)}</td>
                   <td className="num" style={{ padding: "10px 10px", fontSize: 12.5, textAlign: "right" }}>{d.edad ?? "—"} años</td>
-                  <td className="num" style={{ padding: "10px 10px", fontSize: 12.5, textAlign: "right" }}>OPS {fmt(d.ops, 3)}</td>
-                  <td className="num" style={{ padding: "10px 10px", fontSize: 13.5, fontWeight: 800, textAlign: "right", color: pctColor(d.p_ops) }}>
-                    percentil {d.p_ops}
+                  <td className="num" style={{ padding: "10px 10px", fontSize: 12.5, textAlign: "right" }}>wOBA {fmt(d.woba, 3)}</td>
+                  <td className="num" style={{ padding: "10px 10px", fontSize: 12.5, textAlign: "right", color: C.ink2 }}>OPS+ {d.opsPlus}</td>
+                  <td className="num" style={{ padding: "10px 10px", fontSize: 13.5, fontWeight: 800, textAlign: "right", color: pctColor(d.p_woba) }}>
+                    percentil {d.p_woba}
                   </td>
                 </tr>
               ))}
@@ -1138,8 +1245,8 @@ function Plan() {
                 {o.equipo} · {pais(o.pais)}{o.edad ? ` · ${o.edad} años` : ""}
               </div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 10 }}>
-                <span className="disp num" style={{ fontSize: 23, fontWeight: 700 }}>{fmt(o.ops, 3)}</span>
-                <span style={{ fontSize: 11.5, color: C.ink3 }}>OPS · percentil {o.pctil}</span>
+                <span className="disp num" style={{ fontSize: 23, fontWeight: 700 }}>{fmt(o.woba, 3)}</span>
+                <span style={{ fontSize: 11.5, color: C.ink3 }}>wOBA · percentil {o.pctil}</span>
               </div>
               <div style={{ marginTop: 9 }}>
                 <Chip color={o.mexicano ? C.bien : C.neutro2}>
@@ -1153,12 +1260,15 @@ function Plan() {
 
       <Panel title="Cómo leer esto en una junta de tres minutos">
         <ol style={{ margin: 0, paddingLeft: 20, color: C.ink2, fontSize: 14, lineHeight: 1.95, maxWidth: 840 }}>
-          <li>El pitcheo funciona y viene mejorando tres años seguidos. No es donde está el problema.</li>
-          <li>La ofensiva lleva tres años en el fondo. Ahí va el presupuesto de 2027.</li>
+          <li>La ofensiva es la peor de la liga por tercer año seguido, con cualquier métrica.
+            Ahí va el presupuesto de 2027, y no se reparte.</li>
+          <li>El pitcheo no es la contraparte sana: parece 6.º por efectividad, pero es 12.º por FIP
+            y 19.º en ponches menos boletos. Presupuestar 2027 dando por hecha esa efectividad es
+            el segundo error, encima del primero.</li>
           <li>Los cupos de importado del lineup rindieron por debajo del bateador mexicano mediano.
-            No es que se hayan usado demasiados: es que se usaron mal.</li>
-          <li>El bullpen que sostuvo la temporada es mexicano y joven. Es la base que se conserva,
-            y el cupo que libera se reinvierte en el lineup.</li>
+            No se usaron demasiados: se usaron mal.</li>
+          <li>Al conservar lanzadores, mirar el FIP y el K-BB%, no la efectividad. Varios de los
+            relevistas con mejor ERA del roster tienen un fondo que no la sostiene.</li>
           <li>El límite de extranjeros baja a 16 rumbo a 2028–2029. Cada cupo mal asignado cuesta
             más cada año que pasa.</li>
         </ol>
@@ -1202,16 +1312,33 @@ function Metodologia() {
             <dd style={{ margin: 0 }}>Se usa la posición realmente jugada según el servicio de
               estadísticas, no la nominal del roster. Los jardines se agrupan porque la fuente a
               veces etiqueta genérico.</dd>
+            <dt style={dt}>Bateo</dt>
+            <dd style={{ margin: 0 }}>La medida principal es <b>wOBA</b>: pesa cada evento ofensivo
+              por las carreras que realmente produce, en vez de sumar OBP y SLG como si valieran lo
+              mismo (un punto de OBP produce alrededor de 1.8 veces más que uno de SLG). Se muestra
+              en la escala del OBP para que sea legible. <b>OPS+</b> normaliza contra el promedio de
+              la liga de ese año: 100 es el promedio exacto. Hace falta porque el ambiente de
+              carreras se mueve mucho entre temporadas —el OPS de la liga pasó de .861 en 2025 a
+              .807 en 2026— y comparar OPS crudos de años distintos compara cosas distintas.</dd>
+            <dt style={dt}>Pitcheo</dt>
+            <dd style={{ margin: 0 }}>La medida principal es <b>FIP</b>, no la efectividad. Un
+              lanzador no controla lo que pasa cuando la pelota se pone en juego: eso depende de la
+              defensa, del parque y del orden en que caen los hits. FIP reconstruye la efectividad
+              usando solo ponches, boletos más golpeados y cuadrangulares, y la deja en la misma
+              escala para que sean comparables. <b>K-BB%</b> —ponches menos boletos sobre bateadores
+              enfrentados— es la medida más estable de la habilidad de un lanzador y la que menos
+              depende del contexto. La efectividad sigue en todas las tablas, porque es lo que pasó;
+              simplemente no se usa para juzgar quién lanzó bien.</dd>
             <dt style={dt}>Percentil</dt>
             <dd style={{ margin: 0 }}>Posición del jugador dentro de los calificados de su misma
-              posición en toda la liga. Más alto siempre es mejor; en ERA, WHIP, BB/9 y HR permitidos
+              posición en toda la liga. Más alto siempre es mejor; en FIP, ERA, WHIP y HR permitidos
               la escala se invierte.</dd>
             <dt style={dt}>Ventaja sobre<br />el nacional</dt>
-            <dd style={{ margin: 0 }}>Para cada importado, su OPS (o su ERA) menos la mediana de los
+            <dd style={{ margin: 0 }}>Para cada importado, su wOBA (o su FIP) menos la mediana de los
               jugadores mexicanos calificados en su misma posición ese año, ponderado por turnos al
               bate o entradas lanzadas. Cuando hay menos de cinco mexicanos calificados en una
-              posición se usa la mediana mexicana global, para no comparar contra una muestra
-              de dos o tres jugadores.</dd>
+              posición se usa la mediana mexicana global, para no comparar contra una muestra de dos
+              o tres jugadores.</dd>
             <dt style={dt}>Clasificación</dt>
             <dd style={{ margin: 0 }}>Cada jugador se clasifica individualmente por su lugar dentro
               de su posición: tercio superior es Fortaleza, tercio inferior es Área de oportunidad.
@@ -1222,11 +1349,16 @@ function Metodologia() {
               quien fue cambiado a media campaña cuenta completo con el último. Por eso el tablero
               no publica récords de ganados y perdidos derivados de esta fuente: el análisis vive
               en el nivel de jugador, donde la atribución sí es exacta.</dd>
-            <dt style={dt}>Límite</dt>
-            <dd style={{ margin: 0 }}>El país de nacimiento es una aproximación a la condición de
-              importado: la LMB también considera nacionales a naturalizados y descendientes de
-              mexicanos. La conclusión agregada no depende de unos pocos casos, pero el dato exacto
-              de elegibilidad lo tiene el club.</dd>
+            <dt style={dt}>Límites</dt>
+            <dd style={{ margin: 0 }}>Tres, y conviene tenerlos presentes. <b>Uno:</b> el país de
+              nacimiento es una aproximación a la condición de importado —la LMB también considera
+              nacionales a naturalizados y descendientes de mexicanos—, aunque la conclusión agregada
+              no depende de unos pocos casos. <b>Dos:</b> los pesos lineales de wOBA son los estándar
+              derivados de Grandes Ligas; los propios de la LMB requerirían una matriz de expectativa
+              de carreras construida jugada por jugada, que no está en estos datos. <b>Tres:</b> no
+              hay factores de parque. Sin desgloses de local y visitante no se pueden calcular, así
+              que ni OPS+ ni FIP están ajustados por estadio, y el Beto Ávila puede estar aportando
+              parte de la diferencia entre la efectividad y el FIP.</dd>
           </dl>
         </div>
       )}

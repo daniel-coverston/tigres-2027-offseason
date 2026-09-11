@@ -137,6 +137,8 @@ def cargar_pitcheo(year):
                 "h": i(r["H"]), "r": i(r["C"]), "er": i(r["CL"]), "hr": i(r["HR"]),
                 "bb": i(r["BB"]), "k": i(r["P"]), "whip": f(r["WHIP"], None),
                 "avg_against": f(r.get("PRO"), None),
+                "hbp": i(r["GP"]),          # golpeados: validado contra el HBP de los bateadores
+                "pitches": i(r.get("ext_NL")),
                 "hld": i(r.get("ext_HLD")), "gf": i(r.get("ext_JT")),
                 "k9": f(r.get("ext_P/9"), None), "bb9": f(r.get("ext_BB/9"), None),
                 "kbb": f(r.get("ext_P/BB"), None), "wp": i(r.get("ext_WP")),
