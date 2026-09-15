@@ -4,7 +4,7 @@ Tablero interactivo que compara a los jugadores de **Tigres de Quintana Roo** co
 equipos de la Liga Mexicana de Béisbol, posición por posición, sobre las temporadas 2024–2026.
 
 **El hallazgo:** Tigres juega la mitad de su calendario en el **tercer parque más difícil de la
-liga** (factor de carreras 0.733 sobre 5,318 juegos). Descontarlo cambia el diagnóstico en las dos
+liga** (factor de carreras 0.733 sobre 5,150 juegos de casa). Descontarlo cambia el diagnóstico en las dos
 direcciones: la ofensiva pasa de 20.ª a **18.ª de 20** y su OPS+ de 73 a **87**, mientras que el
 pitcheo cae al **14.º por FIP** y su K-BB% queda **último de los 20 equipos**. El problema crónico
 del club no es el que muestran los números crudos.
@@ -18,7 +18,7 @@ del club no es el que muestran los números crudos.
 | Pestaña | Qué responde |
 |---|---|
 | **Diagnóstico** | Dónde está parado el equipo: los 20 clubes en un cuadrante de wOBA contra FIP, la trayectoria de tres años, el percentil del mejor Tigre en cada posición y el panel del espejismo de la efectividad |
-| **El parque** | Los 21 estadios de la liga con su intervalo de confianza, qué evento reprime exactamente el Beto Ávila, lo que eso implica al construir el roster, y el análisis de sensibilidad |
+| **El parque** | La sede de cada club con su intervalo de confianza, qué evento reprime exactamente el Beto Ávila, lo que eso implica al construir el roster, y el análisis de sensibilidad |
 | **Bateo / Pitcheo** | Cada jugador calificado de Tigres contra los de su misma posición en toda la liga: percentiles por métrica, ranking reordenable, cuadrante de dispersión y tabla completa |
 | **Cupos de importado** | Cuánto rindió cada extranjero por encima del jugador mexicano mediano de su posición, y cómo se compara ese retorno con el de los otros 19 equipos |
 | **Plan 2027** | Posiciones ordenadas por urgencia y el perfil de producción que hay que igualar en cada una |
@@ -45,15 +45,16 @@ las dos conclusiones se dio la vuelta**.
   de .861 en 2025 a .807 en 2026.
 
 Medido por efectividad, el pitcheo de Tigres sube del lugar 13 al 6 en tres temporadas. Medido
-por FIP no se mueve: 13.º, 11.º, 12.º. La ofensiva, con cualquiera de las dos medidas, es la peor
-de la liga.
+por FIP no se mueve: 13.º, 11.º, 12.º. Lo que mejoró no fue el pitcheo. La ofensiva, en cambio,
+sale igual de mal con las dos medidas: 20.ª, 19.ª y 20.ª.
 
 ### El ajuste por parque
 
 El Beto Ávila de Cancún tiene un **factor de carreras de 0.733**: se anota 27% menos que en un
 parque promedio de la LMB. Los factores vienen de un proyecto aparte
-([lmb-analytics](https://github.com/daniel-coverston/lmb-analytics)) construido sobre 5,318 juegos
-de 2021–2026 de la MLB Stats API, donde la altitud de la sede explica el 94% de la variación.
+([lmb-analytics](https://github.com/daniel-coverston/lmb-analytics)) construido sobre los 5,150
+juegos de casa disputados en las 21 sedes de la liga entre 2021 y 2026, tomados de la MLB Stats
+API, donde la altitud de la sede explica el 94% de la variación.
 
 Un equipo juega alrededor de la mitad en casa, así que el multiplicador de temporada es
 **(factor + 1) / 2**. Cada evento se ajusta con su propio factor —en Cancún los dobles caen 29%,

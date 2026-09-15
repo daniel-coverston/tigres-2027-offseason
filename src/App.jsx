@@ -328,10 +328,14 @@ function CuadranteEquipos({ eqs, modo }) {
   // Cuantos equipos comparten el cuadrante y que tan lejos queda Tigres del siguiente.
   const yo = eqs.find((e) => e.equipo === "Tigres");
   const peorQueYo = eqs.filter((e) => e[kO] < yo[kO]).length;
+  // La posicion en el cuadro cambia por año y por modo: no se puede afirmar "abajo a la izquierda".
+  const bajo = yo[rF] > 10, izq = yo[rO] > 10;
+  const ubic = bajo && izq ? "abajo a la izquierda" : !bajo && izq ? "arriba a la izquierda"
+    : bajo && !izq ? "abajo a la derecha" : "arriba a la derecha";
   return (
     <Panel
       title="Los 20 equipos en un solo cuadro"
-      sub={`${aj ? "wOBA ajustada por parque" : "wOBA"} del equipo en el eje horizontal, ${aj ? "FIP ajustado" : "FIP"} en el vertical (invertido: arriba es mejor pitcheo). Ambas medidas descuentan el ruido: wOBA pesa cada evento por las carreras que produce y FIP se queda solo con lo que el lanzador controla. Tigres queda abajo a la izquierda: ${peorQueYo === 0 ? "nadie en la liga batea peor" : `solo ${peorQueYo} equipo${peorQueYo > 1 ? "s batean" : " batea"} peor`}, y el pitcheo tampoco alcanza el promedio.`}
+      sub={`${aj ? "wOBA ajustada por parque" : "wOBA"} del equipo en el eje horizontal, ${aj ? "FIP ajustado" : "FIP"} en el vertical (invertido: arriba es mejor pitcheo). Ambas medidas descuentan el ruido: wOBA pesa cada evento por las carreras que produce y FIP se queda solo con lo que el lanzador controla. Tigres queda ${ubic}: ${peorQueYo === 0 ? "nadie en la liga batea peor" : `solo ${peorQueYo} equipo${peorQueYo > 1 ? "s batean" : " batea"} peor`}, y en pitcheo es ${ord(yo[rF])} de 20.`}
     >
       <ResponsiveContainer width="100%" height={430}>
         <ScatterChart margin={{ top: 14, right: 26, left: 2, bottom: 26 }}>
@@ -438,7 +442,7 @@ function Espejismo({ eqs, jug }) {
     <>
       <Panel
         title="El espejismo de la efectividad"
-        sub="Efectividad menos FIP, por equipo. Un número negativo significa que el equipo permitió menos carreras de las que sus lanzadores, por sí solos, se ganaron: la diferencia la puso la defensa, el parque o el orden en que cayeron los hits. Nada de eso se repite solo al año siguiente."
+        sub="Efectividad menos FIP, por equipo, sin ajustar por parque. Un número negativo significa que el equipo permitió menos carreras de las que sus lanzadores se ganaron por sí solos. Parte de esa diferencia ya está explicada —el Beto Ávila reprime 27% de las carreras—, y lo que queda es defensa y el orden en que cayeron los hits. Nada de eso se repite solo al año siguiente."
       >
         <ResponsiveContainer width="100%" height={430}>
           <BarChart data={filas} layout="vertical" margin={{ top: 4, right: 34, left: 92, bottom: 16 }}>
@@ -474,9 +478,10 @@ function Espejismo({ eqs, jug }) {
         <p style={{ fontSize: 13, color: C.ink2, lineHeight: 1.75, marginTop: 10, marginBottom: 0, maxWidth: 840 }}>
           Tigres cerró la temporada con una efectividad de <b>{fmt(yo.era, 2)}</b>, {ord(yo.rank_era)} de la
           liga, sobre un FIP de <b>{fmt(yo.fip, 2)}</b>, que es apenas {ord(yo.rank_fip)}. Son{" "}
-          <b>{fmt(Math.abs(yo.eraFip), 2)} carreras por cada nueve entradas</b> que no salieron del montículo.
-          Y el K-BB% —ponches menos boletos, la medida más estable que existe de la habilidad de un
-          lanzador— deja al equipo {ord(yo.rank_kbb)} de 20.
+          <b>{fmt(Math.abs(yo.eraFip), 2)} carreras por cada nueve entradas</b> que no salieron del
+          montículo. El parque explica buena parte de esa brecha —por eso existe la pestaña{" "}
+          <i>El parque</i>—, pero el punto se sostiene con o sin él: descontado el estadio, el K-BB% del equipo
+          queda <b>{ord(yo.rank_kbbAj)} de 20</b>, y esa es la medida que menos depende del contexto.
         </p>
       </Panel>
 
@@ -553,20 +558,20 @@ function ElParque({ eqs, ir }) {
           foot={`3.º parque más difícil de 21 · IC 95% de ${Number(yo.icBajo).toFixed(3)} a ${Number(yo.icAlto).toFixed(3)}`} />
         <StatTile label="Altitud del Beto Ávila" value={yo.altitud} unit="m"
           foot="La altitud explica el 94% de la variación entre sedes de la liga" />
-        <StatTile label="Juegos analizados" value="5,318" foot="Temporadas 2021–2026, MLB Stats API" />
+        <StatTile label="Juegos analizados" value="5,150" foot="Juegos de casa en las 21 sedes, 2021–2026 · MLB Stats API" />
       </div>
 
       <Panel
-        title="Los 21 parques de la liga"
-        sub="Cuánto se anota en cada sede frente al parque promedio de la liga. Las líneas finas sobre cada barra son el intervalo de confianza del 95%."
+        title="Dónde se anota y dónde no"
+        sub="Cuánto se anota en la sede de cada club frente al parque promedio de la liga — una barra por club, 20 en total, porque Tecos reparte su calendario de casa entre dos estadios y aquí van ponderados. Las líneas finas sobre cada barra son el intervalo de confianza del 95%."
       >
         <ResponsiveContainer width="100%" height={520}>
           <BarChart data={orden} layout="vertical" margin={{ top: 4, right: 40, left: 96, bottom: 16 }}>
             <CartesianGrid stroke={C.line} strokeDasharray="2 4" horizontal={false} />
-            <XAxis type="number" domain={[-42, 46]} ticks={[-40, -20, 0, 20, 40]}
+            <XAxis type="number" domain={[-46, 54]} ticks={[-40, -20, 0, 20, 40]}
               tickFormatter={(v) => (v > 0 ? "+" : "") + v + "%"}
               tick={{ fill: C.ink3, fontSize: 11 }} axisLine={{ stroke: C.line }} tickLine={false}
-              label={{ value: "← se anota menos que en el parque promedio          se anota más →", position: "insideBottom", offset: -8, fill: C.ink3, fontSize: 11 }} />
+              label={{ value: "← se anota menos que en un parque promedio  ·  se anota más →", position: "insideBottom", offset: -8, fill: C.ink3, fontSize: 11 }} />
             <YAxis type="category" dataKey="equipo" width={92} interval={0}
               tick={{ fill: C.ink2, fontSize: 10.5 }} axisLine={false} tickLine={false} />
             <Tooltip cursor={{ fill: "rgba(255,255,255,.045)" }}
@@ -620,7 +625,7 @@ function ElParque({ eqs, ir }) {
           })}
         </div>
         <p style={{ fontSize: 13, color: C.ink2, lineHeight: 1.75, marginTop: 14, marginBottom: 0, maxWidth: 850 }}>
-          Los cuadrangulares salen igual que en cualquier parque, pero los dobles caen tres de cada
+          Los cuadrangulares prácticamente no se mueven (+4%, dentro del ruido), pero los dobles caen tres de cada
           diez y los ponches suben casi 18%. Es un parque que castiga al bateador de contacto y
           maquilla al lanzador que no poncha — que es exactamente el perfil del cuerpo de lanzadores
           de Tigres.
@@ -831,14 +836,24 @@ function Diagnostico({ ir, year, jug, aud, eqs, modo }) {
 
 
 /* ====================================================== detalle posicion */
-function Tabla({ rows, kind, buscador = true }) {
+function Tabla({ rows, kind, modo = "aj", buscador = true }) {
   const [q, setQ] = useState("");
-  const cols = METRICS[kind];
+  // En modo crudo las columnas ajustadas no aplican y solo confunden.
+  const cols = METRICS[kind].filter((m) => (modo === "aj" ? true : !m.soloAj));
+  const principal = principalDe(kind, modo);
+  const dir = METRICS[kind].find((m) => m.key === principal)?.dir ?? 1;
   const vis = useMemo(() => {
+    // El orden y la numeracion siguen a la metrica activa, no al ranking crudo.
+    const ord_ = [...rows].sort((a, b) => {
+      const va = a[principal], vb = b[principal];
+      if (va === null || va === undefined) return 1;
+      if (vb === null || vb === undefined) return -1;
+      return dir === 1 ? vb - va : va - vb;
+    }).map((d, i) => ({ ...d, _n: i + 1 }));
     const k = norm(q).trim();
-    if (!k) return rows;
-    return rows.filter((d) => norm(d.nombre).includes(k) || norm(d.equipo).includes(k) || norm(pais(d.pais)).includes(k));
-  }, [rows, q]);
+    if (!k) return ord_;
+    return ord_.filter((d) => norm(d.nombre).includes(k) || norm(d.equipo).includes(k) || norm(pais(d.pais)).includes(k));
+  }, [rows, q, principal, dir]);
   const th = { textAlign: "right", padding: "9px 10px", color: C.ink3, fontSize: 10.5, fontWeight: 700, letterSpacing: .6, borderBottom: `1px solid ${C.line2}`, whiteSpace: "nowrap", textTransform: "uppercase" };
   const td = { textAlign: "right", padding: "8px 10px", fontSize: 12.5, borderBottom: `1px solid ${C.panel2}` };
   return (
@@ -866,7 +881,7 @@ function Tabla({ rows, kind, buscador = true }) {
           <tbody>
             {vis.map((d) => (
               <tr key={d.pid} style={{ background: d.esTigre ? C.tigresSoft : "transparent" }}>
-                <td className="num" style={{ ...td, textAlign: "left", color: C.ink3 }}>{d.rank}</td>
+                <td className="num" style={{ ...td, textAlign: "left", color: C.ink3 }}>{d._n}</td>
                 <td style={{ ...td, textAlign: "left", fontWeight: d.esTigre ? 700 : 500, color: d.esTigre ? C.tigres : C.ink }}>{d.nombre}</td>
                 <td style={{ ...td, textAlign: "left", color: C.ink2 }}>{d.equipo}</td>
                 <td style={{ ...td, textAlign: "left", color: C.ink3 }}>{pais(d.pais)}</td>
@@ -954,7 +969,7 @@ function PositionDetail({ pos, kind, jug, modo, onClose }) {
                   </div>
                 </div>
               </div>
-              {METRICS[kind].map((m) => (
+              {METRICS[kind].filter((m) => (modo === "aj" ? true : !m.soloAj)).map((m) => (
                 <PercentileBar key={m.key} label={m.label} largo={m.largo}
                   raw={fmt(jugador[m.key], m.dec)} pct={jugador["p_" + m.key]} />
               ))}
@@ -998,7 +1013,8 @@ function PositionDetail({ pos, kind, jug, modo, onClose }) {
             background: C.bg2, color: C.ink, border: `1px solid ${C.line2}`,
             borderRadius: 9, padding: "7px 11px", fontSize: 12.5, fontFamily: "inherit",
           }}>
-            {METRICS[kind].map((m) => <option key={m.key} value={m.key}>Ordenar por {m.label}</option>)}
+            {METRICS[kind].filter((m) => (modo === "aj" ? true : !m.soloAj))
+              .map((m) => <option key={m.key} value={m.key}>Ordenar por {m.label}</option>)}
           </select>
         }
       >
@@ -1031,8 +1047,8 @@ function PositionDetail({ pos, kind, jug, modo, onClose }) {
       <Panel
         title={kind === "hit" ? "Llegar a base vs. poder" : "Control vs. dominio"}
         sub={kind === "hit"
-          ? "OBP en el eje horizontal, SLG en el vertical. Arriba a la derecha es el mejor cuadrante."
-          : "Porcentaje de boletos en el eje horizontal (menos es mejor), porcentaje de ponches en el vertical. Arriba a la izquierda es el mejor cuadrante: quien poncha mucho y regala poco."}
+          ? "OBP en el eje horizontal, SLG en el vertical, ambos sin ajustar por parque. Arriba a la derecha es el mejor cuadrante."
+          : "Porcentaje de boletos en el eje horizontal (menos es mejor), porcentaje de ponches en el vertical, ambos sin ajustar por parque. Arriba a la izquierda es el mejor cuadrante: quien poncha mucho y regala poco."}
       >
         <ResponsiveContainer width="100%" height={340}>
           <ScatterChart margin={{ top: 10, right: 24, left: -2, bottom: 20 }}>
@@ -1069,7 +1085,7 @@ function PositionDetail({ pos, kind, jug, modo, onClose }) {
       </Panel>
 
       <Panel title="Tabla completa de la posición">
-        <Tabla rows={grupo} kind={kind} />
+        <Tabla rows={grupo} kind={kind} modo={modo} />
       </Panel>
     </div>
   );
@@ -1253,8 +1269,13 @@ function EdadRendimiento({ jug, modo }) {
   );
 }
 
-function Cupos({ jug, aud, modo }) {
+function Cupos({ jug, aud, modo, year }) {
   const aj = modo === "aj";
+  // El encabezado cambia con el año: los rangos de 2024 y 2025 no son los de 2026.
+  const rkAud = (fuente) => (fuente[year].find((a) => a.kind === "hit" && a.equipo === "Tigres") || {}).rank;
+  const rCrudo = rkAud(DATA.auditoria), rAj = rkAud(DATA.auditoriaAj);
+  const impH = jug.filter((d) => d.esTigre && d.kind === "hit" && !d.mexicano);
+  const bajoCero = (k) => impH.filter((d) => (d[k] ?? 0) < 0).length;
   const kG = aj ? "gsnAj" : "gsn";
   const kM = { hit: aj ? "wobaAj" : "woba", pitch: aj ? "fipAj" : "fip" };
   const [kind, setKind] = useState("hit");
@@ -1269,16 +1290,28 @@ function Cupos({ jug, aud, modo }) {
     <div>
       <Panel style={{ background: `linear-gradient(150deg,${C.panel},${C.panel2})`, borderLeft: `3px solid ${C.tigres}` }}>
         <h2 className="disp" style={{ margin: "0 0 12px", fontSize: 27, fontWeight: 600, lineHeight: 1.25 }}>
-          El cupo de importado es el activo más escaso del club — y se está encogiendo.
+          {aj
+            ? (rAj <= 11
+                ? "Con el parque descontado, los cupos de importado no fueron el problema."
+                : "Con el parque descontado, los cupos rinden más de lo que parecía — pero no lo suficiente.")
+            : "El cupo de importado es el activo más escaso del club — y se está encogiendo."}
         </h2>
         <p style={{ margin: 0, fontSize: 14.5, color: C.ink2, lineHeight: 1.75, maxWidth: 820 }}>
           La LMB pasó de 20 extranjeros por equipo en 2024–2025 a <b>18 en 2026–2027</b>, con la meta
           declarada de llegar a <b>16 en 2028–2029</b>. Un cupo solo se justifica si compra producción
-          que el mercado mexicano no da. La medida de abajo es exactamente eso: cuánto rindió cada
-          importado <b>por encima del jugador mexicano mediano de su misma posición</b>. Si el número
-          es negativo, un nacional habría rendido más y el cupo salió sobrando. La comparación se hace
-          con <b>wOBA</b> en bateo y con <b>FIP</b> en pitcheo, no con OPS ni con efectividad: son las
-          medidas que descuentan la defensa detrás del lanzador y el peso real de cada evento ofensivo.
+          que el mercado mexicano no da, y eso es lo que mide el panel de abajo: cuánto rindió cada
+          importado <b>por encima del jugador mexicano mediano de su misma posición</b>, con wOBA en
+          bateo y FIP en pitcheo.{" "}
+          {aj
+            ? <>En {year}, con el parque descontado, Tigres queda <b>{ord(rAj)} de 20 en el retorno de sus
+              cupos de bateo</b>{rCrudo > rAj ? <>, contra el {ord(rCrudo)} que marcan los números crudos</> : null}.{" "}
+              Lo que parecía una falla de selección era en buena medida el estadio: de los {impH.length} importados
+              de bateo, {bajoCero("gsnAj")} quedan por debajo del mexicano mediano una vez descontado el
+              estadio, contra {bajoCero("gsn")} sin descontarlo.</>
+            : <>Sin ajustar por parque, en {year} Tigres sale <b>{ord(rCrudo)} de 20</b> y {bajoCero("gsn")} de
+              sus {impH.length} importados de bateo parecen no rentables.{" "}
+              <b>Activa el ajuste por parque en el encabezado</b> antes de sacar conclusiones de este
+              panel: buena parte de eso se explica por dónde batean.</>}
         </p>
       </Panel>
 
@@ -1390,7 +1423,7 @@ function Cupos({ jug, aud, modo }) {
         title={`El contraste: los mexicanos de Tigres en ${kind === "hit" ? "el bateo" : "el pitcheo"}`}
         sub="Los mismos jugadores, sin consumir un solo cupo."
       >
-        <Tabla rows={nacionales} kind={kind} buscador={false} />
+        <Tabla rows={nacionales} kind={kind} modo={modo} buscador={false} />
       </Panel>
     </div>
   );
@@ -1400,10 +1433,12 @@ function Cupos({ jug, aud, modo }) {
 function Plan({ modo }) {
   const jug = DATA.jugadores["2026"];
   const aj = modo === "aj";
-  const huecos = DATA.plan.huecos.filter((h) => h.kind === "hit")
-    .sort((a, b) => (a.pctilMejor ?? -1) - (b.pctilMejor ?? -1));
+  const PLAN = aj ? DATA.planAj : DATA.plan;
+  const huecos = useMemo(() => PLAN.huecos.filter((h) => h.kind === "hit")
+    .sort((a, b) => (a.pctilMejor ?? -1) - (b.pctilMejor ?? -1)), [PLAN]);
   const [pos, setPos] = useState(huecos[0]?.pos);
-  const objetivos = DATA.plan.objetivos[pos] || [];
+  useEffect(() => { setPos(huecos[0]?.pos); }, [modo]);
+  const objetivos = PLAN.objetivos[pos] || [];
   const mios = jug.filter((d) => d.esTigre && d.pos === pos && d.kind === "hit");
 
   return (
@@ -1416,11 +1451,11 @@ function Plan({ modo }) {
           Las posiciones van ordenadas por el percentil del mejor jugador de Tigres en cada una:
           arriba, lo más urgente. Para cada hueco se muestran los seis jugadores que mejor rindieron
           ahí en la liga — no como una lista de fichajes, sino como el <b>perfil de producción</b> que
-          hay que igualar. La disponibilidad contractual la tiene el club. El orden usa wOBA, no OPS.
+          hay que igualar. La disponibilidad contractual la tiene el club. El orden usa {aj ? "wOBA ajustada por parque" : "wOBA"}, no OPS.
         </p>
       </Panel>
 
-      <Panel title="Prioridades del lineup" sub="Percentil de wOBA del mejor bateador de Tigres en cada posición, entre los calificados de toda la liga.">
+      <Panel title="Prioridades del lineup" sub={`Percentil de ${aj ? "wOBA ajustada por parque" : "wOBA"} del mejor bateador de Tigres en cada posición, entre los calificados de toda la liga.`}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(178px,1fr))", gap: 10 }}>
           {huecos.map((h, i) => {
             const act = h.pos === pos;
@@ -1482,8 +1517,8 @@ function Plan({ modo }) {
                 {o.equipo} · {pais(o.pais)}{o.edad ? ` · ${o.edad} años` : ""}
               </div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 10 }}>
-                <span className="disp num" style={{ fontSize: 23, fontWeight: 700 }}>{fmt(o.woba, 3)}</span>
-                <span style={{ fontSize: 11.5, color: C.ink3 }}>wOBA · percentil {o.pctil}</span>
+                <span className="disp num" style={{ fontSize: 23, fontWeight: 700 }}>{fmt(aj ? o.wobaAj : o.woba, 3)}</span>
+                <span style={{ fontSize: 11.5, color: C.ink3 }}>wOBA{aj ? " aj." : ""} · percentil {o.pctil}</span>
               </div>
               <div style={{ marginTop: 9 }}>
                 <Chip color={o.mexicano ? C.bien : C.neutro2}>
@@ -1497,17 +1532,18 @@ function Plan({ modo }) {
 
       <Panel title="Cómo leer esto en una junta de tres minutos">
         <ol style={{ margin: 0, paddingLeft: 20, color: C.ink2, fontSize: 14, lineHeight: 1.95, maxWidth: 840 }}>
-          <li>La ofensiva es la peor de la liga por tercer año seguido, con cualquier métrica.
-            Ahí va el presupuesto de 2027, y no se reparte.</li>
-          <li>El pitcheo no es la contraparte sana: parece 6.º por efectividad, pero es 12.º por FIP
-            y 19.º en ponches menos boletos. Presupuestar 2027 dando por hecha esa efectividad es
-            el segundo error, encima del primero.</li>
-          <li>Los cupos de importado del lineup rindieron por debajo del bateador mexicano mediano.
-            No se usaron demasiados: se usaron mal.</li>
-          <li>Al conservar lanzadores, mirar el FIP y el K-BB%, no la efectividad. Varios de los
-            relevistas con mejor ERA del roster tienen un fondo que no la sostiene.</li>
-          <li>El límite de extranjeros baja a 16 rumbo a 2028–2029. Cada cupo mal asignado cuesta
-            más cada año que pasa.</li>
+          <li>Tigres juega la mitad de su calendario en el tercer parque más difícil de la liga.
+            Cualquier número del club leído sin descontar eso está mal leído.</li>
+          <li>Descontado el parque, la ofensiva es mala pero no catastrófica: 18.ª de 20, OPS+ 87.
+            El problema crónico es otro.</li>
+          <li>El K-BB% del cuerpo de lanzadores es el peor de la liga y lleva tres años en el fondo.
+            El parque lo tapa porque regala 18% más ponches. Esa es la prioridad del offseason.</li>
+          <li>Los cupos de importado no fueron el problema: ajustados, Tigres queda 11.º de 20 y
+            solo tres de sus ocho importados de bateo quedan por debajo del mexicano mediano.</li>
+          <li>Pero la ofensiva no se arregla solo con cupos: de los cuatro peores bates del roster,
+            el receptor y el campocorto son mexicanos y no ocupan cupo.</li>
+          <li>El parque también es una ventaja de mercado: hay que descontar a los bateadores que
+            llegan de parques altos y pagar de más por los que vienen de parques bajos.</li>
         </ol>
       </Panel>
     </div>
@@ -1581,21 +1617,36 @@ function Metodologia() {
               de su posición: tercio superior es Fortaleza, tercio inferior es Área de oportunidad.
               Nunca se etiqueta una posición entera con el resultado de su mejor jugador.</dd>
             <dt style={dt}>Atribución<br />por equipo</dt>
-            <dd style={{ margin: 0 }}>Las cifras de equipo son la suma ponderada de sus jugadores
-              calificados. La fuente asigna a cada jugador un solo equipo por temporada, así que
+            <dd style={{ margin: 0 }}>Las cifras de equipo suman a <b>todos</b> los jugadores que la
+              liga lista con ese equipo, no solo a los calificados: contar solo calificados deja fuera
+              las entradas malas de los lanzadores de paso y hace ver mejor a los equipos con más
+              rotación. La fuente asigna a cada jugador un solo equipo por temporada, así que
               quien fue cambiado a media campaña cuenta completo con el último. Por eso el tablero
               no publica récords de ganados y perdidos derivados de esta fuente: el análisis vive
               en el nivel de jugador, donde la atribución sí es exacta.</dd>
+            <dt style={dt}>Ajuste<br />por parque</dt>
+            <dd style={{ margin: 0 }}>Los factores vienen de un proyecto aparte (<a
+              href="https://github.com/daniel-coverston/lmb-analytics" target="_blank" rel="noreferrer"
+              style={{ color: C.tigres }}>lmb-analytics</a>) calculado sobre los 5,150 juegos de casa
+              disputados en las 21 sedes de la liga entre 2021 y 2026. Un equipo juega alrededor de la
+              mitad en casa, así que el multiplicador de temporada es <b>(factor + 1) / 2</b>. Cada
+              evento se ajusta con su propio factor —en Cancún los dobles caen 29% y los ponches suben
+              18%, pero los cuadrangulares son neutrales— y con los componentes corregidos se
+              recalculan wOBA, OPS+ y FIP desde cero. El interruptor del encabezado apaga y prende
+              todo esto: percentiles, tiers, rankings y auditoría de cupos se recalculan enteros.</dd>
             <dt style={dt}>Límites</dt>
             <dd style={{ margin: 0 }}>Tres, y conviene tenerlos presentes. <b>Uno:</b> el país de
               nacimiento es una aproximación a la condición de importado —la LMB también considera
               nacionales a naturalizados y descendientes de mexicanos—, aunque la conclusión agregada
               no depende de unos pocos casos. <b>Dos:</b> los pesos lineales de wOBA son los estándar
               derivados de Grandes Ligas; los propios de la LMB requerirían una matriz de expectativa
-              de carreras construida jugada por jugada, que no está en estos datos. <b>Tres:</b> no
-              hay factores de parque. Sin desgloses de local y visitante no se pueden calcular, así
-              que ni OPS+ ni FIP están ajustados por estadio, y el Beto Ávila puede estar aportando
-              parte de la diferencia entre la efectividad y el FIP.</dd>
+              de carreras construida jugada por jugada, que no está en estos datos. <b>Tres:</b> el ajuste por
+              parque aplica el mismo factor a todos los jugadores de un equipo, porque la fuente no
+              trae desgloses de local y visitante por jugador. Es la aproximación estándar para líneas
+              de temporada, pero es una aproximación, y el método comprime: el denominador de cada
+              sede incluye juegos en otras sedes, así que estos factores son un piso, no un techo. La
+              pestaña <i>El parque</i> recalcula las conclusiones en los dos extremos del intervalo de
+              confianza para que se vea cuánto aguantan.</dd>
           </dl>
         </div>
       )}
@@ -1689,7 +1740,7 @@ export default function App() {
         {tab === "parque" && <ElParque eqs={eqs} ir={ir} />}
         {tab === "hit" && <VistaGrupo kind="hit" jug={jug} abierta={abiertaHit} setAbierta={setAbiertaHit} modo={modo} />}
         {tab === "pitch" && <VistaGrupo kind="pitch" jug={jug} abierta={abiertaPit} setAbierta={setAbiertaPit} modo={modo} />}
-        {tab === "cupos" && <Cupos jug={jug} aud={aud} modo={modo} />}
+        {tab === "cupos" && <Cupos jug={jug} aud={aud} modo={modo} year={year} />}
         {tab === "plan" && <Plan modo={modo} />}
         <Metodologia />
       </div>

@@ -300,36 +300,45 @@ AUD_AJ = {y: auditoria(y, True) for y in YEARS}
 
 
 # ---------------------------------------------------- 6. huecos y objetivos
-def plan():
+def plan(ajustado=False):
+    """Prioridades del lineup. Se calcula en las dos versiones porque el orden
+    de urgencia cambia cuando se descuenta el parque."""
     y = 2026
+    suf = "Aj" if ajustado else ""
     huecos = []
     for pos in HIT_POS + PIT_POS:
         kind = "hit" if pos in HIT_POS else "pitch"
-        clave = "p_woba" if kind == "hit" else "p_fip"
+        clave = ("p_woba" + suf) if kind == "hit" else ("p_fip" + suf)
         mios = [d for d in JUG[y] if d["pos"] == pos and d["esTigre"] and d["kind"] == kind]
         grp = [d for d in JUG[y] if d["pos"] == pos and d["kind"] == kind]
-        mejor = min(mios, key=lambda d: d["rank"]) if mios else None
+        # El mejor jugador propio se elige con la misma medida que se esta mostrando:
+        # usar el rank crudo en modo ajustado puede coronar a otro jugador.
+        conPctil = [d for d in mios if d[clave] is not None]
+        mejor = max(conPctil, key=lambda d: d[clave]) if conPctil else None
         huecos.append({"pos": pos, "kind": kind,
                        "estado": "cubierto" if mios else "sin calificado",
                        "mejorMio": mejor["nombre"] if mejor else None,
                        "pctilMejor": mejor[clave] if mejor else None,
-                       "gsnMejor": mejor["gsn"] if mejor else None,
+                       "gsnMejor": mejor["gsn" + suf] if mejor else None,
                        "nMios": len(mios), "total": len(grp)})
     objetivos = {}
     for pos in HIT_POS:
         cand = [d for d in JUG[y] if d["pos"] == pos and d["kind"] == "hit"
-                and not d["esTigre"] and d["p_woba"] is not None]
-        cand.sort(key=lambda d: d["rank"])
+                and not d["esTigre"] and d["p_woba" + suf] is not None]
+        cand.sort(key=lambda d: -d["p_woba" + suf])
         objetivos[pos] = [{"nombre": d["nombre"], "equipo": d["equipo"], "pais": d["pais"],
-                           "edad": d["edad"], "woba": d["woba"], "ops": d["ops"],
-                           "pctil": d["p_woba"], "gsn": d["gsn"], "mexicano": d["mexicano"]}
+                           "edad": d["edad"], "woba": d["woba"], "wobaAj": d["wobaAj"],
+                           "ops": d["ops"], "opsPlus": d["opsPlus"], "opsPlusAj": d["opsPlusAj"],
+                           "pctil": d["p_woba" + suf], "gsn": d["gsn" + suf],
+                           "mexicano": d["mexicano"]}
                           for d in cand[:6]]
     return {"huecos": huecos, "objetivos": objetivos}
 
 
 # ------------------------------------------- 7. parques y sensibilidad
 def parques():
-    """Los 21 parques con su factor, intervalo y factores por evento."""
+    """Las sedes de la liga agregadas por club (20; Tecos pondera sus dos estadios),
+    con su factor, intervalo y factores por evento."""
     out = []
     for eq, f in AP.PF.items():
         out.append({
@@ -412,6 +421,7 @@ DATA = {
     "parques": parques(),
     "sensibilidad": sensibilidad(),
     "plan": plan(),
+    "planAj": plan(True),
     "revisarManual": REVISAR,
     "filtros": {"minAB": MIN_AB, "minIP_SP": MIN_IP_SP, "minIP_RP": MIN_IP_RP},
 }

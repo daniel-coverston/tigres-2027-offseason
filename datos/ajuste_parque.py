@@ -5,7 +5,7 @@ Ajuste por factores de parque de la LMB.
 FUENTE
 ------
 Proyecto propio: github.com/daniel-coverston/lmb-analytics, carpeta `data/agregados/`.
-5,318 juegos de la LMB 2021-2026 tomados de la MLB Stats API. La altitud de la sede
+5,150 juegos de casa de la LMB 2021-2026 tomados de la MLB Stats API. La altitud de la sede
 explica R^2 = 0.941 de la variación entre parques.
 
 POR QUÉ IMPORTA AQUÍ

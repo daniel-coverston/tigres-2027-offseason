@@ -1,5 +1,5 @@
 {
-  "name": "tigres-2027-offseason",
+  "name": "tigres-dashboard",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -17,7 +17,6 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
     "vite": "^5.4.1",
-    "vite-plugin-singlefile": "^2.0.3"
-  },
-  "description": "Diagnostico de roster y plan de offseason de Tigres de Quintana Roo sobre la LMB 2024-2026"
+    "vite-plugin-singlefile": "^2.3.3"
+  }
 }
